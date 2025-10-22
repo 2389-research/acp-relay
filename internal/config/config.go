@@ -1,0 +1,47 @@
+// ABOUTME: Configuration loading and management for ACP relay server
+// ABOUTME: Supports YAML files and environment variable overrides
+
+package config
+
+import (
+	"github.com/spf13/viper"
+)
+
+type Config struct {
+	Server ServerConfig `mapstructure:"server"`
+	Agent  AgentConfig  `mapstructure:"agent"`
+}
+
+type ServerConfig struct {
+	HTTPPort       int    `mapstructure:"http_port"`
+	HTTPHost       string `mapstructure:"http_host"`
+	WebSocketPort  int    `mapstructure:"websocket_port"`
+	WebSocketHost  string `mapstructure:"websocket_host"`
+	ManagementPort int    `mapstructure:"management_port"`
+	ManagementHost string `mapstructure:"management_host"`
+}
+
+type AgentConfig struct {
+	Command               string            `mapstructure:"command"`
+	Args                  []string          `mapstructure:"args"`
+	Env                   map[string]string `mapstructure:"env"`
+	StartupTimeoutSeconds int               `mapstructure:"startup_timeout_seconds"`
+	MaxConcurrentSessions int               `mapstructure:"max_concurrent_sessions"`
+}
+
+func Load(path string) (*Config, error) {
+	v := viper.New()
+	v.SetConfigFile(path)
+	v.SetConfigType("yaml")
+
+	if err := v.ReadInConfig(); err != nil {
+		return nil, err
+	}
+
+	var cfg Config
+	if err := v.Unmarshal(&cfg); err != nil {
+		return nil, err
+	}
+
+	return &cfg, nil
+}
