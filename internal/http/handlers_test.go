@@ -5,15 +5,22 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/harper/acp-relay/internal/session"
 )
 
 func TestSessionNew(t *testing.T) {
+	// Get absolute path to mock agent
+	_, filename, _, _ := runtime.Caller(0)
+	projectRoot := filepath.Join(filepath.Dir(filename), "..", "..")
+	mockAgentPath := filepath.Join(projectRoot, "testdata", "mock_agent.py")
+
 	mgr := session.NewManager(session.ManagerConfig{
-		AgentCommand: "cat",
-		AgentArgs:    []string{},
+		AgentCommand: "python3",
+		AgentArgs:    []string{mockAgentPath},
 		AgentEnv:     map[string]string{},
 	})
 

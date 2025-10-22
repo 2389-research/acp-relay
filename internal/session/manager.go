@@ -92,6 +92,12 @@ func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Sessio
 	// Start stdio bridge
 	go sess.StartStdioBridge()
 
+	// Send initialize message to agent (required by ACP protocol)
+	if err := sess.SendInitialize(); err != nil {
+		m.CloseSession(sessionID)
+		return nil, fmt.Errorf("failed to initialize agent: %w", err)
+	}
+
 	return sess, nil
 }
 

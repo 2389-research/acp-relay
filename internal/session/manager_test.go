@@ -2,6 +2,8 @@ package session
 
 import (
 	"context"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -9,9 +11,13 @@ import (
 func TestCreateSession(t *testing.T) {
 	tmpDir := t.TempDir()
 
+	// Get absolute path to mock agent
+	_, filename, _, _ := runtime.Caller(0)
+	mockAgentPath := filepath.Join(filepath.Dir(filename), "testdata", "mock_agent.py")
+
 	mgr := NewManager(ManagerConfig{
-		AgentCommand: "cat", // Use 'cat' as a test subprocess
-		AgentArgs:    []string{},
+		AgentCommand: "python3",
+		AgentArgs:    []string{mockAgentPath},
 		AgentEnv:     map[string]string{},
 	})
 
@@ -37,9 +43,13 @@ func TestCreateSession(t *testing.T) {
 func TestCloseSession(t *testing.T) {
 	tmpDir := t.TempDir()
 
+	// Get absolute path to mock agent
+	_, filename, _, _ := runtime.Caller(0)
+	mockAgentPath := filepath.Join(filepath.Dir(filename), "testdata", "mock_agent.py")
+
 	mgr := NewManager(ManagerConfig{
-		AgentCommand: "cat",
-		AgentArgs:    []string{},
+		AgentCommand: "python3",
+		AgentArgs:    []string{mockAgentPath},
 		AgentEnv:     map[string]string{},
 	})
 

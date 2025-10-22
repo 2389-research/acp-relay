@@ -3,6 +3,8 @@ package session
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -10,10 +12,13 @@ import (
 func TestStdioBridge(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Use 'cat' which echoes stdin to stdout
+	// Get absolute path to mock agent
+	_, filename, _, _ := runtime.Caller(0)
+	mockAgentPath := filepath.Join(filepath.Dir(filename), "testdata", "mock_agent.py")
+
 	mgr := NewManager(ManagerConfig{
-		AgentCommand: "cat",
-		AgentArgs:    []string{},
+		AgentCommand: "python3",
+		AgentArgs:    []string{mockAgentPath},
 		AgentEnv:     map[string]string{},
 	})
 
@@ -23,11 +28,11 @@ func TestStdioBridge(t *testing.T) {
 	}
 	defer mgr.CloseSession(sess.ID)
 
-	// Send a JSON-RPC message
+	// Send a JSON-RPC message (non-initialize method)
 	msg := map[string]interface{}{
 		"jsonrpc": "2.0",
 		"method":  "test",
-		"id":      1,
+		"id":      2,
 	}
 	data, _ := json.Marshal(msg)
 	data = append(data, '\n')
@@ -41,8 +46,17 @@ func TestStdioBridge(t *testing.T) {
 		if err := json.Unmarshal(response, &parsed); err != nil {
 			t.Fatalf("failed to parse response: %v", err)
 		}
-		if parsed["method"] != "test" {
-			t.Errorf("expected method 'test', got %v", parsed["method"])
+		// Mock agent echoes back the request in the result
+		result, ok := parsed["result"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected result object in response")
+		}
+		echo, ok := result["echo"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected echo in result")
+		}
+		if echo["method"] != "test" {
+			t.Errorf("expected method 'test', got %v", echo["method"])
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatal("timeout waiting for response")
