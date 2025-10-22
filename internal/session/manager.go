@@ -89,6 +89,9 @@ func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Sessio
 	m.sessions[sessionID] = sess
 	m.mu.Unlock()
 
+	// Start stdio bridge
+	go sess.StartStdioBridge()
+
 	return sess, nil
 }
 
