@@ -164,8 +164,7 @@ def main():
     if result:
         print("✅ Successfully communicated with ACP agent via relay!")
     else:
-        print("⚠️  Note: This example uses a test echo agent.")
-        print("   For real responses, configure an actual ACP agent in config.yaml")
+        print("⚠️  Prompt did not return a result (agent may have sent notifications instead)")
 
     print("\n" + "="*60)
     print("🎉 Hello World example complete!")
