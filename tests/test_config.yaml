@@ -1,0 +1,18 @@
+server:
+  http_port: 8080
+  http_host: "127.0.0.1"
+  websocket_port: 8081
+  websocket_host: "127.0.0.1"
+  management_port: 8082
+  management_host: "127.0.0.1"
+
+agent:
+  command: "/Users/harper/workspace/2389/acp-relay/tests/test_agent.sh"
+  args: []
+  env: {}
+  startup_timeout_seconds: 10
+  max_concurrent_sessions: 100
+
+logging:
+  level: "info"
+  format: "json"
