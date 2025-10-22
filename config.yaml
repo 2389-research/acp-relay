@@ -7,8 +7,11 @@ server:
   management_host: "127.0.0.1"
 
 agent:
-  command: "/usr/local/bin/acp-agent"
-  args: []
-  env: {}
+  command: "npx"
+  args: ["@zed-industries/claude-code-acp"]
+  env:
+    ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+    HOME: "${HOME}"
+    PATH: "${PATH}"
   startup_timeout_seconds: 10
   max_concurrent_sessions: 100
