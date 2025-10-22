@@ -122,9 +122,9 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 				continue
 			}
 
-			// Translate params from "content" to "prompt" for ACP agent
+			// Translate params from "content" to "prompt" and use agent's session ID
 			agentParams := map[string]interface{}{
-				"sessionId": params.SessionID,
+				"sessionId": currentSession.AgentSessionID, // Use agent's session ID, not relay's
 				"prompt":    json.RawMessage(params.Content),
 			}
 			agentParamsJSON, _ := json.Marshal(agentParams)

@@ -31,6 +31,16 @@ def main():
                         "capabilities": {}
                     }
                 }
+            elif method == "session/new":
+                # Respond to session/new with a mock session ID
+                # Expecting params: { cwd: string, mcpServers: object }
+                response = {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": {
+                        "sessionId": "mock_sess_12345"
+                    }
+                }
             else:
                 # Echo back other requests
                 response = {

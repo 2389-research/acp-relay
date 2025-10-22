@@ -98,6 +98,12 @@ func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Sessio
 		return nil, fmt.Errorf("failed to initialize agent: %w", err)
 	}
 
+	// Send session/new to agent and get their session ID
+	if err := sess.SendSessionNew(workingDir); err != nil {
+		m.CloseSession(sessionID)
+		return nil, fmt.Errorf("failed to create agent session: %w", err)
+	}
+
 	return sess, nil
 }
 

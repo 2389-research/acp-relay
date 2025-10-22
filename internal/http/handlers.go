@@ -93,9 +93,9 @@ func (s *Server) handleSessionPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Forward request to agent, translating "content" to "prompt" per ACP spec
+	// Forward request to agent, translating "content" to "prompt" and using agent's session ID
 	agentParams := map[string]interface{}{
-		"sessionId": params.SessionID,
+		"sessionId": sess.AgentSessionID, // Use agent's session ID, not relay's
 		"prompt":    json.RawMessage(params.Content),
 	}
 	agentParamsJSON, _ := json.Marshal(agentParams)

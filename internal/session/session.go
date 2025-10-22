@@ -12,16 +12,17 @@ import (
 )
 
 type Session struct {
-	ID          string
-	WorkingDir  string
-	AgentCmd    *exec.Cmd
-	AgentStdin  io.WriteCloser
-	AgentStdout io.ReadCloser
-	AgentStderr io.ReadCloser
-	ToAgent     chan []byte
-	FromAgent   chan []byte
-	Context     context.Context
-	Cancel      context.CancelFunc
+	ID             string
+	AgentSessionID string // The session ID from the ACP agent
+	WorkingDir     string
+	AgentCmd       *exec.Cmd
+	AgentStdin     io.WriteCloser
+	AgentStdout    io.ReadCloser
+	AgentStderr    io.ReadCloser
+	ToAgent        chan []byte
+	FromAgent      chan []byte
+	Context        context.Context
+	Cancel         context.CancelFunc
 }
 
 // StartStdioBridge starts goroutines to bridge channels and stdio
