@@ -11,6 +11,7 @@ import (
 
 	"github.com/harper/acp-relay/internal/config"
 	httpserver "github.com/harper/acp-relay/internal/http"
+	mgmtserver "github.com/harper/acp-relay/internal/management"
 	"github.com/harper/acp-relay/internal/session"
 	wsserver "github.com/harper/acp-relay/internal/websocket"
 )
@@ -37,6 +38,9 @@ func main() {
 	// Create WebSocket server
 	wsSrv := wsserver.NewServer(sessionMgr)
 
+	// Create management server
+	mgmtSrv := mgmtserver.NewServer(cfg, sessionMgr)
+
 	// Start HTTP server in goroutine
 	go func() {
 		addr := fmt.Sprintf("%s:%d", cfg.Server.HTTPHost, cfg.Server.HTTPPort)
@@ -46,10 +50,19 @@ func main() {
 		}
 	}()
 
-	// Start WebSocket server on main goroutine
-	wsAddr := fmt.Sprintf("%s:%d", cfg.Server.WebSocketHost, cfg.Server.WebSocketPort)
-	log.Printf("Starting WebSocket server on %s", wsAddr)
-	if err := http.ListenAndServe(wsAddr, wsSrv); err != nil {
-		log.Fatalf("WebSocket server failed: %v", err)
+	// Start WebSocket server in goroutine
+	go func() {
+		wsAddr := fmt.Sprintf("%s:%d", cfg.Server.WebSocketHost, cfg.Server.WebSocketPort)
+		log.Printf("Starting WebSocket server on %s", wsAddr)
+		if err := http.ListenAndServe(wsAddr, wsSrv); err != nil {
+			log.Fatalf("WebSocket server failed: %v", err)
+		}
+	}()
+
+	// Start management server on main goroutine (localhost only for security)
+	mgmtAddr := fmt.Sprintf("%s:%d", cfg.Server.ManagementHost, cfg.Server.ManagementPort)
+	log.Printf("Starting management API on %s", mgmtAddr)
+	if err := http.ListenAndServe(mgmtAddr, mgmtSrv); err != nil {
+		log.Fatalf("Management server failed: %v", err)
 	}
 }
