@@ -1,0 +1,151 @@
+// ABOUTME: WebSocket server for bidirectional ACP communication
+// ABOUTME: Handles persistent connections with streaming JSON-RPC messages
+
+package websocket
+
+import (
+	"context"
+	"encoding/json"
+	"log"
+	"net/http"
+
+	"github.com/gorilla/websocket"
+	"github.com/harper/acp-relay/internal/jsonrpc"
+	"github.com/harper/acp-relay/internal/session"
+)
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true // TODO: Add proper origin checking
+	},
+}
+
+type Server struct {
+	sessionMgr *session.Manager
+}
+
+func NewServer(mgr *session.Manager) *Server {
+	return &Server{sessionMgr: mgr}
+}
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("websocket upgrade failed: %v", err)
+		return
+	}
+
+	s.handleConnection(conn)
+}
+
+func (s *Server) handleConnection(conn *websocket.Conn) {
+	defer conn.Close()
+
+	var currentSession *session.Session
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Goroutine: Read from agent and send to WebSocket
+	fromAgent := make(chan []byte, 10)
+	go func() {
+		for {
+			select {
+			case msg := <-fromAgent:
+				if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					log.Printf("websocket write error: %v", err)
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// Main loop: Read from WebSocket
+	for {
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			log.Printf("websocket read error: %v", err)
+			break
+		}
+
+		var req jsonrpc.Request
+		if err := json.Unmarshal(message, &req); err != nil {
+			s.sendError(conn, jsonrpc.ParseError, "invalid JSON", nil)
+			continue
+		}
+
+		// Handle different methods
+		switch req.Method {
+		case "session/new":
+			var params struct {
+				WorkingDirectory string `json:"workingDirectory"`
+			}
+			if err := json.Unmarshal(req.Params, &params); err != nil {
+				s.sendError(conn, jsonrpc.InvalidParams, "invalid params", req.ID)
+				continue
+			}
+
+			sess, err := s.sessionMgr.CreateSession(ctx, params.WorkingDirectory)
+			if err != nil {
+				s.sendError(conn, jsonrpc.ServerError, err.Error(), req.ID)
+				continue
+			}
+
+			currentSession = sess
+
+			// Start forwarding agent messages to WebSocket
+			go func() {
+				for msg := range sess.FromAgent {
+					fromAgent <- msg
+				}
+			}()
+
+			// Send response
+			result := map[string]interface{}{"sessionId": sess.ID}
+			s.sendResponse(conn, result, req.ID)
+
+		default:
+			// Forward to agent
+			if currentSession == nil {
+				s.sendError(conn, jsonrpc.ServerError, "no session created", req.ID)
+				continue
+			}
+
+			reqData, _ := json.Marshal(req)
+			reqData = append(reqData, '\n')
+			currentSession.ToAgent <- reqData
+		}
+	}
+
+	// Cleanup
+	if currentSession != nil {
+		s.sessionMgr.CloseSession(currentSession.ID)
+	}
+}
+
+func (s *Server) sendResponse(conn *websocket.Conn, result interface{}, id *json.RawMessage) {
+	resultData, _ := json.Marshal(result)
+	resp := jsonrpc.Response{
+		JSONRPC: "2.0",
+		Result:  resultData,
+		ID:      id,
+	}
+
+	data, _ := json.Marshal(resp)
+	conn.WriteMessage(websocket.TextMessage, data)
+}
+
+func (s *Server) sendError(conn *websocket.Conn, code int, message string, id *json.RawMessage) {
+	resp := jsonrpc.Response{
+		JSONRPC: "2.0",
+		Error: &jsonrpc.Error{
+			Code:    code,
+			Message: message,
+		},
+		ID: id,
+	}
+
+	data, _ := json.Marshal(resp)
+	conn.WriteMessage(websocket.TextMessage, data)
+}
