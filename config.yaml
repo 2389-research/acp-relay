@@ -12,7 +12,3 @@ agent:
   env: {}
   startup_timeout_seconds: 10
   max_concurrent_sessions: 100
-
-logging:
-  level: "info"
-  format: "json"
