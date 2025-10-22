@@ -106,8 +106,42 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			result := map[string]interface{}{"sessionId": sess.ID}
 			s.sendResponse(conn, result, req.ID)
 
+		case "session/prompt":
+			// Forward to agent, translating "content" to "prompt" per ACP spec
+			if currentSession == nil {
+				s.sendLLMError(conn, errors.NewSessionNotFoundError("no session"), req.ID)
+				continue
+			}
+
+			var params struct {
+				SessionID string          `json:"sessionId"`
+				Content   json.RawMessage `json:"content"`
+			}
+			if err := json.Unmarshal(req.Params, &params); err != nil {
+				s.sendLLMError(conn, errors.NewInvalidParamsError("sessionId or content", "object", "invalid or missing"), req.ID)
+				continue
+			}
+
+			// Translate params from "content" to "prompt" for ACP agent
+			agentParams := map[string]interface{}{
+				"sessionId": params.SessionID,
+				"prompt":    json.RawMessage(params.Content),
+			}
+			agentParamsJSON, _ := json.Marshal(agentParams)
+
+			agentReq := jsonrpc.Request{
+				JSONRPC: "2.0",
+				Method:  "session/prompt",
+				Params:  json.RawMessage(agentParamsJSON),
+				ID:      req.ID,
+			}
+
+			reqData, _ := json.Marshal(agentReq)
+			reqData = append(reqData, '\n')
+			currentSession.ToAgent <- reqData
+
 		default:
-			// Forward to agent
+			// Forward other methods to agent as-is
 			if currentSession == nil {
 				s.sendLLMError(conn, errors.NewSessionNotFoundError("no session"), req.ID)
 				continue
