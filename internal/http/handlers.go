@@ -112,15 +112,48 @@ func (s *Server) handleSessionPrompt(w http.ResponseWriter, r *http.Request) {
 
 	sess.ToAgent <- reqData
 
-	// Wait for response (with timeout)
-	select {
-	case respData := <-sess.FromAgent:
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(respData)
-	case <-time.After(30 * time.Second):
-		writeLLMError(w, errors.NewInternalError("agent response timeout after 30 seconds"), req.ID)
-	case <-r.Context().Done():
-		writeLLMError(w, errors.NewInternalError("request cancelled by client"), req.ID)
+	// Collect all messages until we get the response to our request
+	// Per ACP spec: agent may send multiple session/update notifications,
+	// then finally responds to the session/prompt request with a stopReason
+	var messages []json.RawMessage
+	requestID := string(*req.ID)
+
+	timeout := time.After(30 * time.Second)
+	for {
+		select {
+		case respData := <-sess.FromAgent:
+			messages = append(messages, respData)
+
+			// Check if this is the final response (has matching ID)
+			var resp map[string]interface{}
+			if err := json.Unmarshal(respData, &resp); err == nil {
+				if idField, ok := resp["id"]; ok {
+					// This is a response (not a notification)
+					idBytes, _ := json.Marshal(idField)
+					if string(idBytes) == requestID {
+						// This is the response to our request - turn is complete
+						w.Header().Set("Content-Type", "application/json")
+						// Return all messages as a JSON array
+						w.Write([]byte("["))
+						for i, msg := range messages {
+							if i > 0 {
+								w.Write([]byte(","))
+							}
+							w.Write(msg)
+						}
+						w.Write([]byte("]"))
+						return
+					}
+				}
+			}
+
+		case <-timeout:
+			writeLLMError(w, errors.NewInternalError("agent response timeout after 30 seconds"), req.ID)
+			return
+		case <-r.Context().Done():
+			writeLLMError(w, errors.NewInternalError("request cancelled by client"), req.ID)
+			return
+		}
 	}
 }
 

@@ -110,15 +110,35 @@ def send_prompt(session_id, prompt_text):
         return None
 
     data = response.json()
-    pretty_print("Agent Response", data)
 
-    if "error" in data:
-        print("❌ Error from agent:")
-        print(f"   Code: {data['error']['code']}")
-        print(f"   Message: {data['error']['message']}")
+    # Response is now an array of messages (notifications + final response)
+    if isinstance(data, list):
+        print(f"\n📨 Received {len(data)} message(s) from agent:")
+        for i, msg in enumerate(data, 1):
+            print(f"\n--- Message {i}/{len(data)} ---")
+            pretty_print(f"Message {i}", msg)
+
+            # Check for errors in any message
+            if "error" in msg:
+                print("❌ Error from agent:")
+                print(f"   Code: {msg['error']['code']}")
+                print(f"   Message: {msg['error']['message']}")
+                return None
+
+        # Return the final response (the one with an ID)
+        for msg in data:
+            if "id" in msg:
+                return msg.get("result")
         return None
-
-    return data.get("result")
+    else:
+        # Single message (backward compatibility)
+        pretty_print("Agent Response", data)
+        if "error" in data:
+            print("❌ Error from agent:")
+            print(f"   Code: {data['error']['code']}")
+            print(f"   Message: {data['error']['message']}")
+            return None
+        return data.get("result")
 
 def check_health():
     """Check relay server health"""
