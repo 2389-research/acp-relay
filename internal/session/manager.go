@@ -6,6 +6,7 @@ package session
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"sync"
 
@@ -40,8 +41,8 @@ func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Sessio
 	cmd := exec.CommandContext(sessionCtx, m.config.AgentCommand, m.config.AgentArgs...)
 	cmd.Dir = workingDir
 
-	// Set up environment
-	cmd.Env = append(cmd.Env, "PWD="+workingDir)
+	// Set up environment - inherit parent env and add custom vars
+	cmd.Env = append(os.Environ(), "PWD="+workingDir)
 	for k, v := range m.config.AgentEnv {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
