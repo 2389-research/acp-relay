@@ -60,7 +60,12 @@ func (s *Session) StartStdioBridge() {
 	go func() {
 		scanner := bufio.NewScanner(s.AgentStderr)
 		for scanner.Scan() {
-			log.Printf("agent stderr [%s]: %s", s.ID, scanner.Text())
+			select {
+			case <-s.Context.Done():
+				return
+			default:
+				log.Printf("agent stderr [%s]: %s", s.ID, scanner.Text())
+			}
 		}
 	}()
 }

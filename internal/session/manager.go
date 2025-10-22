@@ -108,10 +108,10 @@ func (m *Manager) CloseSession(sessionID string) error {
 	// Cancel context (kills process)
 	sess.Cancel()
 
-	// Wait for process to exit
+	// Wait for process to exit and all goroutines to finish
 	sess.AgentCmd.Wait()
 
-	// Close channels
+	// Close channels after process has exited to prevent race conditions
 	close(sess.ToAgent)
 	close(sess.FromAgent)
 

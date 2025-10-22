@@ -23,9 +23,6 @@ func TestStdioBridge(t *testing.T) {
 	}
 	defer mgr.CloseSession(sess.ID)
 
-	// Start stdio bridge
-	go sess.StartStdioBridge()
-
 	// Send a JSON-RPC message
 	msg := map[string]interface{}{
 		"jsonrpc": "2.0",
