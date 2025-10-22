@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
+	"github.com/harper/acp-relay/internal/errors"
 	"github.com/harper/acp-relay/internal/jsonrpc"
 	"github.com/harper/acp-relay/internal/session"
 )
@@ -71,7 +72,7 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 
 		var req jsonrpc.Request
 		if err := json.Unmarshal(message, &req); err != nil {
-			s.sendError(conn, jsonrpc.ParseError, "invalid JSON", nil)
+			s.sendLLMError(conn, errors.NewParseError(err.Error()), nil)
 			continue
 		}
 
@@ -82,13 +83,13 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 				WorkingDirectory string `json:"workingDirectory"`
 			}
 			if err := json.Unmarshal(req.Params, &params); err != nil {
-				s.sendError(conn, jsonrpc.InvalidParams, "invalid params", req.ID)
+				s.sendLLMError(conn, errors.NewInvalidParamsError("workingDirectory", "string", "invalid or missing"), req.ID)
 				continue
 			}
 
 			sess, err := s.sessionMgr.CreateSession(ctx, params.WorkingDirectory)
 			if err != nil {
-				s.sendError(conn, jsonrpc.ServerError, err.Error(), req.ID)
+				s.sendLLMError(conn, errors.NewAgentConnectionError(params.WorkingDirectory, 1, 10000, err.Error()), req.ID)
 				continue
 			}
 
@@ -108,7 +109,7 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 		default:
 			// Forward to agent
 			if currentSession == nil {
-				s.sendError(conn, jsonrpc.ServerError, "no session created", req.ID)
+				s.sendLLMError(conn, errors.NewSessionNotFoundError("no session"), req.ID)
 				continue
 			}
 
@@ -144,6 +145,17 @@ func (s *Server) sendError(conn *websocket.Conn, code int, message string, id *j
 			Message: message,
 		},
 		ID: id,
+	}
+
+	data, _ := json.Marshal(resp)
+	conn.WriteMessage(websocket.TextMessage, data)
+}
+
+func (s *Server) sendLLMError(conn *websocket.Conn, err *jsonrpc.Error, id *json.RawMessage) {
+	resp := jsonrpc.Response{
+		JSONRPC: "2.0",
+		Error:   err,
+		ID:      id,
 	}
 
 	data, _ := json.Marshal(resp)
