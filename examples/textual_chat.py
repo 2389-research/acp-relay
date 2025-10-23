@@ -33,19 +33,76 @@ WORKING_DIR = "/tmp"
 class ChatMessage(Static):
     """A single chat message widget"""
 
-    def __init__(self, role: str, text: str, timestamp: str):
+    def __init__(self, role: str, text: str, timestamp: str, msg_type: str = "text", data: dict = None):
         self.role = role
         self.text = text
         self.timestamp = timestamp
+        self.msg_type = msg_type
+        self.data = data or {}
         super().__init__()
 
     def compose(self) -> ComposeResult:
         if self.role == "user":
             yield Static(f"[dim]{self.timestamp}[/dim] [bold cyan]You:[/bold cyan] {self.text}")
+
         elif self.role == "agent":
             yield Static(f"[dim]{self.timestamp}[/dim] [bold green]Agent:[/bold green] {self.text}")
+
         elif self.role == "system":
-            yield Static(f"[dim]{self.timestamp}[/dim] [bold yellow]System:[/bold yellow] {self.text}")
+            # Handle different system message types
+            if self.msg_type == "available_commands_update":
+                # Show available commands nicely
+                commands = self.data.get("availableCommands", [])
+                commands_text = f"[dim]{self.timestamp}[/dim] 📋 [bold yellow]Available Commands Updated[/bold yellow]\n"
+
+                if commands and len(commands) <= 5:
+                    for cmd in commands[:5]:
+                        name = cmd.get("name", "unknown")
+                        desc = cmd.get("description", "")
+                        if len(desc) > 50:
+                            desc = desc[:50] + "..."
+                        commands_text += f"   [yellow]•[/yellow] [bold yellow]/{name}[/bold yellow]"
+                        if desc:
+                            commands_text += f" [dim]- {desc}[/dim]"
+                        commands_text += "\n"
+                    if len(commands) > 5:
+                        commands_text += f"   [dim]... and {len(commands) - 5} more[/dim]\n"
+                else:
+                    commands_text += f"   [dim]{len(commands)} commands available[/dim]\n"
+
+                yield Static(commands_text)
+
+            elif self.msg_type == "permission_request":
+                # Show permission request
+                tool = self.data.get("tool", "unknown")
+                args = self.data.get("arguments", {})
+                perm_text = f"[dim]{self.timestamp}[/dim] 🔐 [bold yellow]Permission Request:[/bold yellow] [bold cyan]{tool}[/bold cyan]\n"
+                if args:
+                    perm_text += f"   [dim]Args: {json.dumps(args, indent=2)}[/dim]\n"
+                yield Static(perm_text)
+
+            elif self.msg_type == "permission_response":
+                # Show permission decision
+                tool = self.data.get("tool", "unknown")
+                allowed = self.data.get("allowed", False)
+                icon = "✅" if allowed else "❌"
+                status_style = "bold green" if allowed else "bold red"
+                status = "Allowed" if allowed else "Denied"
+                yield Static(f"[dim]{self.timestamp}[/dim] {icon} [{status_style}]Permission {status}:[/{status_style}] [cyan]{tool}[/cyan]")
+
+            elif self.msg_type == "tool_use":
+                # Show tool usage
+                tool = self.data.get("tool", "unknown")
+                yield Static(f"[dim]{self.timestamp}[/dim] 🔧 [bold magenta]Tool Used:[/bold magenta] [bold cyan]{tool}[/bold cyan]")
+
+            elif self.msg_type == "thinking":
+                # Show thinking indicator
+                yield Static(f"[dim]{self.timestamp}[/dim] 💭 [dim italic]Agent is thinking...[/dim italic]")
+
+            else:
+                # Generic system message
+                yield Static(f"[dim]{self.timestamp}[/dim] ℹ️ [bold yellow]System:[/bold yellow] {self.text}")
+
         elif self.role == "unhandled":
             yield Static(f"[dim]{self.timestamp}[/dim] [bold red]Unhandled Message:[/bold red]\n{self.text}")
 
@@ -204,11 +261,11 @@ class ACPChatApp(App):
         messages.mount(ChatMessage("agent", text, timestamp))
         messages.scroll_end(animate=False)
 
-    def add_system_message(self, text: str):
+    def add_system_message(self, text: str, msg_type: str = "text", data: dict = None):
         """Add a system message to the chat"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         messages = self.query_one("#messages", ScrollableContainer)
-        messages.mount(ChatMessage("system", text, timestamp))
+        messages.mount(ChatMessage("system", text, timestamp, msg_type, data))
         messages.scroll_end(animate=False)
 
     def add_unhandled_message(self, msg: dict):
@@ -258,16 +315,22 @@ class ACPChatApp(App):
         raw_input = tool_call.get("rawInput", {})
 
         # Parse the tool name and arguments
-        file_path = raw_input.get("file_path", "")
-        content = raw_input.get("content", "")
+        arguments = {}
+        if "file_path" in raw_input:
+            arguments["file_path"] = raw_input["file_path"]
+        if "content" in raw_input:
+            content = raw_input["content"]
+            if len(content) > 100:
+                arguments["content"] = content[:100] + "..."
+            else:
+                arguments["content"] = content
 
-        # Show permission request in chat
-        tool_summary = f"Tool: {tool_id}\nFile: {file_path}"
-        if content:
-            preview = content[:100] + "..." if len(content) > 100 else content
-            tool_summary += f"\nContent preview: {preview}"
-
-        self.add_system_message(f"🔐 Permission requested:\n{tool_summary}")
+        # Show permission request in chat with nice formatting
+        self.add_system_message(
+            "",
+            msg_type="permission_request",
+            data={"tool": tool_id, "arguments": arguments}
+        )
 
         # For now, auto-approve all permissions
         # Response format per ACP TypeScript SDK example:
@@ -284,7 +347,12 @@ class ACPChatApp(App):
         }
         await self.websocket.send(json.dumps(response))
 
-        self.add_system_message(f"✅ Auto-approved: {tool_id}")
+        # Show permission response in chat with nice formatting
+        self.add_system_message(
+            "",
+            msg_type="permission_response",
+            data={"tool": tool_id, "allowed": True}
+        )
         self.update_status(f"✅ Auto-approved")
 
     async def receive_messages(self):
@@ -318,12 +386,40 @@ class ACPChatApp(App):
 
                         # Handler: Available commands update
                         elif session_update_type == "available_commands_update":
-                            self.update_status("ℹ️ Agent updated available commands")
+                            commands = update.get("availableCommands", [])
+                            self.add_system_message(
+                                "",
+                                msg_type="available_commands_update",
+                                data={"availableCommands": commands}
+                            )
+                            self.update_status(f"ℹ️  Agent updated {len(commands)} commands")
+                            handled = True
+
+                        # Handler: Tool use notification
+                        elif session_update_type == "tool_use":
+                            tool_name = update.get("tool", {}).get("name", "unknown")
+                            self.add_system_message(
+                                "",
+                                msg_type="tool_use",
+                                data={"tool": tool_name}
+                            )
+                            self.update_status(f"🔧 Tool: {tool_name}")
+                            handled = True
+
+                        # Handler: Thinking notification
+                        elif session_update_type == "agent_thinking":
+                            self.add_system_message(
+                                "",
+                                msg_type="thinking",
+                                data={}
+                            )
+                            self.update_status("💭 Agent is thinking...")
                             handled = True
 
                         # Handler: Other session updates
                         else:
-                            self.update_status(f"ℹ️ Session update: {session_update_type}")
+                            self.add_system_message(f"Session update: {session_update_type}")
+                            self.update_status(f"ℹ️  Session update: {session_update_type}")
                             handled = True
 
                 # Handler: Final response (turn complete)
