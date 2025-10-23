@@ -5,8 +5,10 @@ package config
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
@@ -62,6 +64,20 @@ func Load(path string) (*Config, error) {
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, err
+	}
+
+	// IMPORTANT: Viper lowercases all map keys, but environment variables are case-sensitive
+	// Parse YAML directly to preserve original key case for agent.env
+	data, err := os.ReadFile(path)
+	if err == nil {
+		var rawConfig struct {
+			Agent struct {
+				Env map[string]string `yaml:"env"`
+			} `yaml:"agent"`
+		}
+		if yaml.Unmarshal(data, &rawConfig) == nil && len(rawConfig.Agent.Env) > 0 {
+			cfg.Agent.Env = rawConfig.Agent.Env
+		}
 	}
 
 	// Default to process mode if not specified
