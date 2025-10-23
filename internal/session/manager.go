@@ -185,7 +185,12 @@ func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Sessio
 	}
 
 	// Send session/new to agent
-	if err := sess.SendSessionNew(workingDir); err != nil {
+	// For container mode, use the container workspace path, not the host path
+	agentWorkingDir := workingDir
+	if m.config.Mode == "container" {
+		agentWorkingDir = m.config.ContainerConfig.WorkspaceContainerPath
+	}
+	if err := sess.SendSessionNew(agentWorkingDir); err != nil {
 		m.CloseSession(sessionID)
 		return nil, fmt.Errorf("failed to create agent session: %w", err)
 	}
