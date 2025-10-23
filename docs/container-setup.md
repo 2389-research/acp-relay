@@ -139,6 +139,40 @@ docker images | grep acp-relay-agent
 
 ## Features
 
+### Session Resumption
+
+Sessions now persist when clients disconnect, allowing you to resume work after network interruptions or client crashes.
+
+**How it works:**
+
+1. **Create a session:**
+   ```json
+   {"jsonrpc":"2.0","method":"session/new","params":{"workingDirectory":"/tmp"},"id":1}
+   ```
+   Response: `{"result":{"sessionId":"sess_abc12345"}}`
+
+2. **Client disconnects** (crash, network issue, etc.)
+   - Session stays alive
+   - Container keeps running
+   - Agent state is preserved
+
+3. **Resume the session:**
+   ```json
+   {"jsonrpc":"2.0","method":"session/resume","params":{"sessionId":"sess_abc12345"},"id":2}
+   ```
+   Response: `{"result":{"sessionId":"sess_abc12345"}}`
+
+4. **Continue working** - pick up exactly where you left off!
+
+**Logs you'll see:**
+
+```
+[WS:sess_abc] Client disconnected, session remains active for resumption
+[WS:sess_abc] Client resuming session
+```
+
+**Important:** Sessions don't timeout automatically yet, so you may want to manually clean up old sessions using the management API.
+
 ### Automatic ~/.claude Mounting
 
 The relay automatically mounts your `~/.claude` directory as **read-only** at `/home/.claude` inside the container. This gives agents access to:
