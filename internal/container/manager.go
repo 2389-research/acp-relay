@@ -90,6 +90,7 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 		// Expand environment variable references
 		expandedVal := os.ExpandEnv(v)
 		envVars = append(envVars, fmt.Sprintf("%s=%s", k, expandedVal))
+		log.Printf("[%s] Setting env: %s=%s (from template: %s)", sessionID, k, expandedVal, v)
 	}
 
 	// 3. Create container config
