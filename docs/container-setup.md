@@ -31,12 +31,15 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 docker build -t acp-relay-runtime:latest .
 ```
 
-This creates a **generic runtime image** with Node.js, Python, git, and common tools. The specific agent command is configured at runtime via config.yaml, not baked into the image.
+This creates a **runtime image** with Node.js, Python, git, and common tools. The Claude Code agent is pre-installed for fast startup, but the specific agent command is still configured at runtime via config.yaml.
 
 **One image, multiple agents!** The same runtime image can run:
-- Claude Code: `npx @zed-industries/claude-code-acp`
-- Codex agent: `python -m codex_agent`
-- Custom agents: `/usr/local/bin/my-agent`
+- Claude Code: `npx @zed-industries/claude-code-acp` (pre-installed, fast startup)
+- Other npm agents: `npx @other/agent` (downloads at runtime)
+- Python agents: `python -m codex_agent`
+- Custom binaries: `/usr/local/bin/my-agent`
+
+**Why pre-install Claude Code?** Without pre-installation, `npx` downloads the agent on every session (~20 seconds), causing timeouts. Pre-installing gives instant startup while maintaining runtime command flexibility.
 
 ### 3. Configure the relay
 
