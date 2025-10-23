@@ -46,6 +46,7 @@ class ChatSession:
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.messages.append({
             "role": "user",
+            "type": "text",
             "text": text,
             "timestamp": timestamp
         })
@@ -54,7 +55,18 @@ class ChatSession:
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.messages.append({
             "role": "agent",
+            "type": "text",
             "text": text,
+            "timestamp": timestamp
+        })
+
+    def add_system_message(self, msg_type, data):
+        """Add a system/update message with special rendering"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        self.messages.append({
+            "role": "system",
+            "type": msg_type,
+            "data": data,
             "timestamp": timestamp
         })
 
@@ -70,13 +82,102 @@ class ChatSession:
                 text.append(msg["text"], style="white")
                 output.append(text)
                 output.append("")  # Add spacing
-            else:
+
+            elif msg["role"] == "agent":
                 text = Text()
                 text.append(f"[{msg['timestamp']}] ", style="dim")
                 text.append("Agent: ", style="bold green")
                 text.append(msg["text"], style="white")
                 output.append(text)
                 output.append("")  # Add spacing
+
+            elif msg["role"] == "system":
+                # Render system messages based on type
+                msg_type = msg["type"]
+                data = msg["data"]
+
+                if msg_type == "available_commands_update":
+                    # Show available commands as a nice list
+                    text = Text()
+                    text.append(f"[{msg['timestamp']}] ", style="dim")
+                    text.append("📋 ", style="")
+                    text.append("Available Commands Updated", style="bold yellow")
+                    output.append(text)
+
+                    commands = data.get("availableCommands", [])
+                    if commands and len(commands) <= 5:
+                        # Show first few commands
+                        for cmd in commands[:5]:
+                            cmd_text = Text()
+                            cmd_text.append("   • ", style="yellow")
+                            cmd_text.append(f"/{cmd.get('name', 'unknown')}", style="bold yellow")
+                            if cmd.get('description'):
+                                desc = cmd['description']
+                                if len(desc) > 50:
+                                    desc = desc[:50] + "..."
+                                cmd_text.append(f" - {desc}", style="dim")
+                            output.append(cmd_text)
+                        if len(commands) > 5:
+                            output.append(Text(f"   ... and {len(commands) - 5} more", style="dim"))
+                    else:
+                        output.append(Text(f"   {len(commands)} commands available", style="dim"))
+                    output.append("")
+
+                elif msg_type == "permission_request":
+                    # Show permission request
+                    text = Text()
+                    text.append(f"[{msg['timestamp']}] ", style="dim")
+                    text.append("🔐 ", style="")
+                    text.append("Permission Request: ", style="bold yellow")
+                    text.append(data.get("tool", "unknown"), style="bold cyan")
+                    output.append(text)
+
+                    if data.get("arguments"):
+                        output.append(Text(f"   Args: {json.dumps(data['arguments'], indent=2)}", style="dim"))
+                    output.append("")
+
+                elif msg_type == "permission_response":
+                    # Show permission decision
+                    allowed = data.get("allowed", False)
+                    tool = data.get("tool", "unknown")
+                    icon = "✅" if allowed else "❌"
+                    status = "Allowed" if allowed else "Denied"
+
+                    text = Text()
+                    text.append(f"[{msg['timestamp']}] ", style="dim")
+                    text.append(f"{icon} ", style="")
+                    text.append(f"Permission {status}: ", style="bold green" if allowed else "bold red")
+                    text.append(tool, style="cyan")
+                    output.append(text)
+                    output.append("")
+
+                elif msg_type == "tool_use":
+                    # Show tool usage
+                    text = Text()
+                    text.append(f"[{msg['timestamp']}] ", style="dim")
+                    text.append("🔧 ", style="")
+                    text.append("Tool Used: ", style="bold magenta")
+                    text.append(data.get("tool", "unknown"), style="bold cyan")
+                    output.append(text)
+                    output.append("")
+
+                elif msg_type == "thinking":
+                    # Show agent thinking indicator
+                    text = Text()
+                    text.append(f"[{msg['timestamp']}] ", style="dim")
+                    text.append("💭 ", style="")
+                    text.append("Agent is thinking...", style="italic dim")
+                    output.append(text)
+                    output.append("")
+
+                else:
+                    # Generic system message
+                    text = Text()
+                    text.append(f"[{msg['timestamp']}] ", style="dim")
+                    text.append("ℹ️  ", style="")
+                    text.append(f"System: {msg_type}", style="dim italic")
+                    output.append(text)
+                    output.append("")
 
         # If agent is currently typing, show the in-progress response
         if self.is_typing and self.current_response:
@@ -108,6 +209,13 @@ async def handle_permission_request(websocket, request_msg, chat_session, live):
     arguments = params.get("arguments", {})
     request_id = request_msg.get("id")
 
+    # Add permission request to chat history
+    chat_session.add_system_message(
+        "permission_request",
+        {"tool": tool_name, "arguments": arguments}
+    )
+    live.update(render_chat_ui(chat_session))
+
     # Show permission request to user
     live.stop()
     console.print(f"\n[bold yellow]🔐 Permission Request:[/bold yellow]")
@@ -134,9 +242,11 @@ async def handle_permission_request(websocket, request_msg, chat_session, live):
         request_id
     )
 
-    # Update chat with permission decision
-    decision = "✅ Allowed" if allowed else "❌ Denied"
-    chat_session.add_agent_message(f"Permission request for {tool_name}: {decision}")
+    # Add permission response to chat history
+    chat_session.add_system_message(
+        "permission_response",
+        {"tool": tool_name, "allowed": allowed}
+    )
     live.update(render_chat_ui(chat_session))
 
 
@@ -178,17 +288,34 @@ async def receive_until_complete(websocket, expected_id, chat_session, live):
 
                         # Handler: Available commands update
                         elif session_update_type == "available_commands_update":
-                            # Log that commands were updated but don't show to user
-                            live.stop()
-                            console.print("[dim]ℹ️  Agent updated available commands[/dim]")
-                            live.start()
+                            # Add to chat history with nice formatting
+                            chat_session.add_system_message(
+                                "available_commands_update",
+                                {"availableCommands": update.get("availableCommands", [])}
+                            )
+                            live.update(render_chat_ui(chat_session))
+                            handled = True
+
+                        # Handler: Tool use notification
+                        elif session_update_type == "tool_use":
+                            tool_name = update.get("tool", {}).get("name", "unknown")
+                            chat_session.add_system_message(
+                                "tool_use",
+                                {"tool": tool_name}
+                            )
+                            live.update(render_chat_ui(chat_session))
+                            handled = True
+
+                        # Handler: Thinking notification
+                        elif session_update_type == "agent_thinking":
+                            chat_session.add_system_message("thinking", {})
+                            live.update(render_chat_ui(chat_session))
                             handled = True
 
                         # Handler: Other session updates (log them)
                         else:
-                            live.stop()
-                            console.print(f"[dim]ℹ️  Session update: {session_update_type}[/dim]")
-                            live.start()
+                            chat_session.add_system_message(session_update_type, update)
+                            live.update(render_chat_ui(chat_session))
                             handled = True
 
                 # Handler: Final response (turn complete)
