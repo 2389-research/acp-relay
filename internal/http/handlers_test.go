@@ -19,10 +19,11 @@ func TestSessionNew(t *testing.T) {
 	mockAgentPath := filepath.Join(projectRoot, "testdata", "mock_agent.py")
 
 	mgr := session.NewManager(session.ManagerConfig{
+		Mode:         "process",
 		AgentCommand: "python3",
 		AgentArgs:    []string{mockAgentPath},
 		AgentEnv:     map[string]string{},
-	})
+	}, nil)
 
 	srv := NewServer(mgr)
 

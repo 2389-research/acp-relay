@@ -6,6 +6,7 @@ package container
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -13,19 +14,31 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/harper/acp-relay/internal/config"
 	"github.com/harper/acp-relay/internal/db"
-	"github.com/harper/acp-relay/internal/session"
 )
+
+// ContainerInfo tracks a running container for a session
+type ContainerInfo struct {
+	ContainerID string
+	SessionID   string
+}
+
+// SessionComponents contains the IO streams and metadata needed to create a session
+type SessionComponents struct {
+	ContainerID string
+	Stdin       io.WriteCloser
+	Stdout      io.ReadCloser
+	Stderr      io.ReadCloser
+}
 
 type Manager struct {
 	config       config.ContainerConfig
 	agentEnv     map[string]string
 	dockerClient *client.Client
-	sessions     map[string]*session.Session
+	containers   map[string]*ContainerInfo // sessionID -> container info
 	mu           sync.RWMutex
 	db           *db.DB
 }
@@ -59,12 +72,12 @@ func NewManager(cfg config.ContainerConfig, agentEnv map[string]string, database
 		config:       cfg,
 		agentEnv:     agentEnv,
 		dockerClient: dockerClient,
-		sessions:     make(map[string]*session.Session),
+		containers:   make(map[string]*ContainerInfo),
 		db:           database,
 	}, nil
 }
 
-func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir string) (*session.Session, error) {
+func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir string) (*SessionComponents, error) {
 	// 1. Create host workspace directory
 	hostWorkspace := filepath.Join(m.config.WorkspaceHostBase, sessionID)
 	if err := os.MkdirAll(hostWorkspace, 0755); err != nil {
@@ -143,25 +156,21 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 	// 10. Start background monitor
 	go m.monitorContainer(ctx, resp.ID, sessionID)
 
-	// 11. Create session
-	sess := &session.Session{
-		ID:          sessionID,
-		WorkingDir:  workingDir,
-		ContainerID: resp.ID,
-		AgentStdin:  attachResp.Conn,
-		AgentStdout: stdoutReader,
-		AgentStderr: stderrReader,
-		ToAgent:     make(chan []byte, 10),
-		FromAgent:   make(chan []byte, 10),
-		DB:          m.db,
-	}
-
-	// Store session
+	// 11. Store container info
 	m.mu.Lock()
-	m.sessions[sessionID] = sess
+	m.containers[sessionID] = &ContainerInfo{
+		ContainerID: resp.ID,
+		SessionID:   sessionID,
+	}
 	m.mu.Unlock()
 
-	return sess, nil
+	// 12. Return session components for session manager to assemble
+	return &SessionComponents{
+		ContainerID: resp.ID,
+		Stdin:       attachResp.Conn,
+		Stdout:      stdoutReader,
+		Stderr:      stderrReader,
+	}, nil
 }
 
 func parseMemoryLimit(limit string) (int64, error) {
@@ -229,12 +238,12 @@ func (b *bytesBuffer) Write(p []byte) (n int, err error) {
 
 func (m *Manager) StopContainer(sessionID string) error {
 	m.mu.Lock()
-	sess, exists := m.sessions[sessionID]
+	containerInfo, exists := m.containers[sessionID]
 	if !exists {
 		m.mu.Unlock()
-		return fmt.Errorf("session not found: %s", sessionID)
+		return fmt.Errorf("container not found for session: %s", sessionID)
 	}
-	delete(m.sessions, sessionID)
+	delete(m.containers, sessionID)
 	m.mu.Unlock()
 
 	// Stop container
@@ -242,7 +251,7 @@ func (m *Manager) StopContainer(sessionID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout+5)*time.Second)
 	defer cancel()
 
-	if err := m.dockerClient.ContainerStop(ctx, sess.ContainerID, container.StopOptions{
+	if err := m.dockerClient.ContainerStop(ctx, containerInfo.ContainerID, container.StopOptions{
 		Timeout: &timeout,
 	}); err != nil {
 		log.Printf("[%s] Failed to stop container: %v", sessionID, err)

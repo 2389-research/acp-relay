@@ -43,10 +43,14 @@ func main() {
 
 	// Create session manager
 	sessionMgr := session.NewManager(session.ManagerConfig{
-		AgentCommand: cfg.Agent.Command,
-		AgentArgs:    cfg.Agent.Args,
-		AgentEnv:     cfg.Agent.Env,
+		Mode:            cfg.Agent.Mode,
+		AgentCommand:    cfg.Agent.Command,
+		AgentArgs:       cfg.Agent.Args,
+		AgentEnv:        cfg.Agent.Env,
+		ContainerConfig: cfg.Agent.Container,
 	}, database)
+
+	log.Printf("Session manager initialized (mode: %s)", cfg.Agent.Mode)
 
 	// Create HTTP server
 	httpSrv := httpserver.NewServer(sessionMgr)

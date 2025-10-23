@@ -11,8 +11,8 @@ import (
 )
 
 // demuxStreams separates Docker's multiplexed stdout/stderr stream
-// Returns two readers: one for stdout, one for stderr
-func demuxStreams(multiplexed io.Reader) (stdout, stderr io.Reader) {
+// Returns two readers: one for stdout, one for stderr (both are ReadCloser from io.Pipe)
+func demuxStreams(multiplexed io.Reader) (stdout, stderr io.ReadCloser) {
 	stdoutPipe, stdoutWriter := io.Pipe()
 	stderrPipe, stderrWriter := io.Pipe()
 
