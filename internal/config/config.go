@@ -4,6 +4,8 @@
 package config
 
 import (
+	"fmt"
+
 	"github.com/spf13/viper"
 )
 
@@ -28,10 +30,24 @@ type ServerConfig struct {
 
 type AgentConfig struct {
 	Command               string            `mapstructure:"command"`
+	Mode                  string            `mapstructure:"mode"` // "process" or "container"
 	Args                  []string          `mapstructure:"args"`
 	Env                   map[string]string `mapstructure:"env"`
+	Container             ContainerConfig   `mapstructure:"container"`
 	StartupTimeoutSeconds int               `mapstructure:"startup_timeout_seconds"`
 	MaxConcurrentSessions int               `mapstructure:"max_concurrent_sessions"`
+}
+
+type ContainerConfig struct {
+	Image                  string  `mapstructure:"image"`
+	DockerHost             string  `mapstructure:"docker_host"`
+	NetworkMode            string  `mapstructure:"network_mode"`
+	MemoryLimit            string  `mapstructure:"memory_limit"`
+	CPULimit               float64 `mapstructure:"cpu_limit"`
+	WorkspaceHostBase      string  `mapstructure:"workspace_host_base"`
+	WorkspaceContainerPath string  `mapstructure:"workspace_container_path"`
+	AutoRemove             bool    `mapstructure:"auto_remove"`
+	StartupTimeoutSeconds  int     `mapstructure:"startup_timeout_seconds"`
 }
 
 func Load(path string) (*Config, error) {
@@ -46,6 +62,16 @@ func Load(path string) (*Config, error) {
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, err
+	}
+
+	// Default to process mode if not specified
+	if cfg.Agent.Mode == "" {
+		cfg.Agent.Mode = "process"
+	}
+
+	// Validate mode
+	if cfg.Agent.Mode != "process" && cfg.Agent.Mode != "container" {
+		return nil, fmt.Errorf("invalid agent.mode: %s (must be 'process' or 'container')", cfg.Agent.Mode)
 	}
 
 	return &cfg, nil
