@@ -310,12 +310,18 @@ class ACPChatApp(App):
         # Show session selection modal using run_worker to ensure we're in worker context
         async def show_session_selector():
             result = await self.push_screen_wait(SessionSelectionScreen(sessions))
-            if result["action"] == "new":
+            self.notify(f"Session selection result: {result}")  # Debug
+
+            if result and result.get("action") == "new":
                 # Create new session
                 await self.create_new_session()
-            elif result["action"] == "resume":
+            elif result and result.get("action") == "resume":
                 # Resume existing session
-                await self.resume_session(result["session"])
+                session = result.get("session")
+                self.notify(f"Resuming session: {session}")  # Debug
+                await self.resume_session(session)
+            else:
+                self.notify(f"Unexpected result: {result}", severity="warning")
 
         self.run_worker(show_session_selector, exclusive=True)
 
@@ -365,7 +371,12 @@ class ACPChatApp(App):
 
         try:
             # Connect to relay server
+            self.update_status(f"Connecting to relay server...")
             self.websocket = await websockets.connect(RELAY_WS_URL)
+
+            if not self.websocket:
+                raise Exception("Failed to establish WebSocket connection")
+
             self.update_status(f"Resuming session {self.session_id[:8]}...")
 
             # Load previous messages from database
@@ -380,6 +391,8 @@ class ACPChatApp(App):
         except Exception as e:
             self.update_status(f"❌ Error: {e}")
             self.notify(f"Failed to resume session: {e}", severity="error")
+            import traceback
+            self.notify(f"Traceback: {traceback.format_exc()}", severity="error")
 
     async def load_session_history(self):
         """Load previous messages from the database"""
