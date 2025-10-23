@@ -19,7 +19,7 @@ func TestCreateSession(t *testing.T) {
 		AgentCommand: "python3",
 		AgentArgs:    []string{mockAgentPath},
 		AgentEnv:     map[string]string{},
-	})
+	}, nil) // nil db for test
 
 	sess, err := mgr.CreateSession(context.Background(), tmpDir)
 	if err != nil {
@@ -51,7 +51,7 @@ func TestCloseSession(t *testing.T) {
 		AgentCommand: "python3",
 		AgentArgs:    []string{mockAgentPath},
 		AgentEnv:     map[string]string{},
-	})
+	}, nil) // nil db for test
 
 	sess, err := mgr.CreateSession(context.Background(), tmpDir)
 	if err != nil {

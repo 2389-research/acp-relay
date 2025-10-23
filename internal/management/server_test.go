@@ -18,7 +18,7 @@ func TestHealthEndpoint(t *testing.T) {
 
 	mgr := session.NewManager(session.ManagerConfig{
 		AgentCommand: cfg.Agent.Command,
-	})
+	}, nil) // nil db for test
 
 	srv := NewServer(cfg, mgr)
 
@@ -52,7 +52,7 @@ func TestConfigEndpoint(t *testing.T) {
 
 	mgr := session.NewManager(session.ManagerConfig{
 		AgentCommand: cfg.Agent.Command,
-	})
+	}, nil) // nil db for test
 
 	srv := NewServer(cfg, mgr)
 

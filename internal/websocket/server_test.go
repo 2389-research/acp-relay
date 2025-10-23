@@ -21,7 +21,7 @@ func TestWebSocketConnection(t *testing.T) {
 		AgentCommand: "python3",
 		AgentArgs:    []string{mockAgentPath},
 		AgentEnv:     map[string]string{},
-	})
+	}, nil) // nil db for test
 
 	srv := NewServer(mgr)
 
