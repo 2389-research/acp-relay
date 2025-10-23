@@ -189,6 +189,10 @@ func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Sessio
 	agentWorkingDir := workingDir
 	if m.config.Mode == "container" {
 		agentWorkingDir = m.config.ContainerConfig.WorkspaceContainerPath
+		if agentWorkingDir == "" {
+			m.CloseSession(sessionID)
+			return nil, fmt.Errorf("container mode requires workspace_container_path to be set in config")
+		}
 	}
 	if err := sess.SendSessionNew(agentWorkingDir); err != nil {
 		m.CloseSession(sessionID)

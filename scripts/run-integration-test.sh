@@ -46,8 +46,14 @@ sleep 1
 
 # Clean up old containers
 echo -e "${YELLOW}Cleaning up old containers...${NC}"
-docker stop $(docker ps -q --filter "name=sess") 2>/dev/null || true
-docker rm $(docker ps -aq --filter "name=sess") 2>/dev/null || true
+RUNNING_CONTAINERS=$(docker ps -q --filter "name=sess")
+if [ -n "$RUNNING_CONTAINERS" ]; then
+    docker stop $RUNNING_CONTAINERS 2>/dev/null || true
+fi
+ALL_CONTAINERS=$(docker ps -aq --filter "name=sess")
+if [ -n "$ALL_CONTAINERS" ]; then
+    docker rm $ALL_CONTAINERS 2>/dev/null || true
+fi
 
 # Start relay in background
 echo -e "${GREEN}Starting relay...${NC}"

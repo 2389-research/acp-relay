@@ -133,13 +133,9 @@ self-contained."""
                 })
                 print(f"✓ Prompt sent, waiting for agent response...")
 
-                # Wait for agent to process (give it time to create the file)
-                print("  Waiting for agent to create the file...")
-                await asyncio.sleep(5)
-
-                # Step 3: Verify the file was created
+                # Step 3: Wait for file to be created (with retries)
                 print()
-                print("Step 3: Verifying datestamp.py was created...")
+                print("Step 3: Waiting for agent to create datestamp.py...")
                 # File is created in the container workspace which is mounted at:
                 # {workspace_base}/{session_id}/datestamp.py
                 workspace_dir = Path(self.workspace_base) / self.session_id
@@ -147,7 +143,21 @@ self-contained."""
 
                 print(f"  Looking for file at: {expected_file}")
 
-                if expected_file.exists():
+                # Poll for file with timeout (agent may take time to process)
+                max_wait = 30  # seconds
+                poll_interval = 2  # seconds
+                waited = 0
+                file_created = False
+
+                while waited < max_wait:
+                    if expected_file.exists():
+                        file_created = True
+                        break
+                    print(f"  File not found yet, waiting... ({waited}/{max_wait}s)")
+                    await asyncio.sleep(poll_interval)
+                    waited += poll_interval
+
+                if file_created:
                     print(f"✓ File created: {expected_file}")
                     print()
                     print("File contents:")
