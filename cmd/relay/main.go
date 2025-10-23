@@ -33,6 +33,14 @@ func main() {
 	}
 	defer database.Close()
 
+	// Startup maintenance: mark all open sessions as closed (they crashed/were orphaned)
+	closedCount, err := database.CloseAllOpenSessions()
+	if err != nil {
+		log.Printf("Warning: failed to close open sessions during startup: %v", err)
+	} else if closedCount > 0 {
+		log.Printf("Startup maintenance: marked %d crashed/orphaned sessions as closed", closedCount)
+	}
+
 	// Create session manager
 	sessionMgr := session.NewManager(session.ManagerConfig{
 		AgentCommand: cfg.Agent.Command,

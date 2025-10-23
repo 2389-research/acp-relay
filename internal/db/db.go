@@ -97,6 +97,18 @@ func (db *DB) CloseSession(sessionID string) error {
 	return nil
 }
 
+// CloseAllOpenSessions marks all open sessions as closed (for startup maintenance)
+func (db *DB) CloseAllOpenSessions() (int64, error) {
+	result, err := db.conn.Exec(
+		"UPDATE sessions SET closed_at = CURRENT_TIMESTAMP WHERE closed_at IS NULL",
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to close open sessions: %w", err)
+	}
+	rowsAffected, _ := result.RowsAffected()
+	return rowsAffected, nil
+}
+
 // LogMessage logs a message with direction and parsed details
 func (db *DB) LogMessage(sessionID string, direction MessageDirection, rawMessage []byte) error {
 	// Parse message to extract useful fields
