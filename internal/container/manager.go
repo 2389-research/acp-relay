@@ -90,7 +90,14 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 		// Expand environment variable references
 		expandedVal := os.ExpandEnv(v)
 		envVars = append(envVars, fmt.Sprintf("%s=%s", k, expandedVal))
-		log.Printf("[%s] Setting env: %s=%s (from template: %s)", sessionID, k, expandedVal, v)
+
+		// Warn if expansion resulted in empty value for critical env vars
+		if expandedVal == "" && (k == "ANTHROPIC_API_KEY" || k == "OPENAI_API_KEY") {
+			log.Printf("[%s] WARNING: %s is empty after expansion (template: %s)", sessionID, k, v)
+			log.Printf("[%s] Make sure %s is set in your environment before starting the relay", sessionID, k)
+		} else {
+			log.Printf("[%s] Setting env: %s=%s (from template: %s)", sessionID, k, expandedVal, v)
+		}
 	}
 
 	// 3. Create container config
@@ -109,10 +116,21 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 	}
 
 	// 5. Create host config with mounts and limits
+	binds := []string{
+		fmt.Sprintf("%s:%s", hostWorkspace, m.config.WorkspaceContainerPath),
+	}
+
+	// Mount user's ~/.claude directory as read-only for agent configuration
+	claudeDir := filepath.Join(os.Getenv("HOME"), ".claude")
+	if _, err := os.Stat(claudeDir); err == nil {
+		binds = append(binds, fmt.Sprintf("%s:/home/.claude:ro", claudeDir))
+		log.Printf("[%s] Mounting ~/.claude directory as read-only", sessionID)
+	} else {
+		log.Printf("[%s] ~/.claude directory not found, skipping mount", sessionID)
+	}
+
 	hostConfig := &container.HostConfig{
-		Binds: []string{
-			fmt.Sprintf("%s:%s", hostWorkspace, m.config.WorkspaceContainerPath),
-		},
+		Binds:       binds,
 		AutoRemove:  m.config.AutoRemove,
 		NetworkMode: container.NetworkMode(m.config.NetworkMode),
 		Resources: container.Resources{
