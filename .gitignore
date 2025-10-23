@@ -1,1 +1,5 @@
 relay
+*.db
+*.db-shm
+*.db-wal
+relay-*

@@ -4,9 +4,11 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -43,11 +45,41 @@ func (s *Server) handleSessionNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create session
-	sess, err := s.sessionMgr.CreateSession(r.Context(), params.WorkingDirectory)
+	// Use context.Background() because session should outlive this HTTP request
+	sess, err := s.sessionMgr.CreateSession(context.Background(), params.WorkingDirectory)
 	if err != nil {
 		writeLLMError(w, errors.NewAgentConnectionError(params.WorkingDirectory, 1, 10000, err.Error()), req.ID)
 		return
 	}
+
+	// Start draining FromAgent into MessageBuffer to prevent channel blocking
+	// HTTP is stateless so we can't stream messages like WebSocket does
+	go func() {
+		log.Printf("[HTTP:%s] Starting drain goroutine", sess.ID[:8])
+		drainCount := 0
+		for {
+			select {
+			case msg := <-sess.FromAgent:
+				drainCount++
+				preview := string(msg)
+				if len(preview) > 100 {
+					preview = preview[:100] + "..."
+				}
+				log.Printf("[HTTP:%s] Drain #%d received from FromAgent: %s", sess.ID[:8], drainCount, preview)
+
+				sess.BufferMutex.Lock()
+				sess.MessageBuffer = append(sess.MessageBuffer, msg)
+				bufLen := len(sess.MessageBuffer)
+				sess.BufferMutex.Unlock()
+
+				log.Printf("[HTTP:%s] Drain #%d added to buffer (total buffered: %d)", sess.ID[:8], drainCount, bufLen)
+
+			case <-sess.Context.Done():
+				log.Printf("[HTTP:%s] Drain goroutine stopping, drained %d messages", sess.ID[:8], drainCount)
+				return
+			}
+		}
+	}()
 
 	// Return response
 	result := map[string]interface{}{
@@ -110,28 +142,69 @@ func (s *Server) handleSessionPrompt(w http.ResponseWriter, r *http.Request) {
 	reqData, _ := json.Marshal(agentReq)
 	reqData = append(reqData, '\n')
 
+	log.Printf("[HTTP:%s] Sending prompt to agent (reqID=%s)", params.SessionID[:8], string(*req.ID))
 	sess.ToAgent <- reqData
+	log.Printf("[HTTP:%s] Prompt sent to ToAgent channel", params.SessionID[:8])
 
 	// Collect all messages until we get the response to our request
 	// Per ACP spec: agent may send multiple session/update notifications,
 	// then finally responds to the session/prompt request with a stopReason
-	var messages []json.RawMessage
+	//
+	// Note: Messages are buffered in sess.MessageBuffer by a background goroutine
+	// to prevent channel blocking since HTTP is stateless
 	requestID := string(*req.ID)
+	startTime := time.Now()
+	timeout := 30 * time.Second
+	pollCount := 0
 
-	timeout := time.After(30 * time.Second)
+	log.Printf("[HTTP:%s] Starting poll loop, looking for reqID=%s", params.SessionID[:8], requestID)
+
 	for {
-		select {
-		case respData := <-sess.FromAgent:
-			messages = append(messages, respData)
+		pollCount++
 
-			// Check if this is the final response (has matching ID)
+		// Check for timeout
+		elapsed := time.Since(startTime)
+		if elapsed > timeout {
+			sess.BufferMutex.Lock()
+			bufSize := len(sess.MessageBuffer)
+			sess.BufferMutex.Unlock()
+			log.Printf("[HTTP:%s] TIMEOUT after %v, %d polls, buffer size: %d", params.SessionID[:8], elapsed, pollCount, bufSize)
+			writeLLMError(w, errors.NewInternalError("agent response timeout after 30 seconds"), req.ID)
+			return
+		}
+
+		// Check if request was cancelled
+		select {
+		case <-r.Context().Done():
+			writeLLMError(w, errors.NewInternalError("request cancelled by client"), req.ID)
+			return
+		default:
+		}
+
+		// Check message buffer for response
+		sess.BufferMutex.Lock()
+		bufSize := len(sess.MessageBuffer)
+		messages := make([]json.RawMessage, bufSize)
+		for i, msg := range sess.MessageBuffer {
+			messages[i] = json.RawMessage(msg)
+		}
+		sess.BufferMutex.Unlock()
+
+		if pollCount == 1 || pollCount%100 == 0 {
+			log.Printf("[HTTP:%s] Poll #%d: buffer=%d messages, elapsed=%v", params.SessionID[:8], pollCount, bufSize, elapsed)
+		}
+
+		// Look for the final response with matching ID
+		for _, respData := range messages {
 			var resp map[string]interface{}
 			if err := json.Unmarshal(respData, &resp); err == nil {
 				if idField, ok := resp["id"]; ok {
 					// This is a response (not a notification)
 					idBytes, _ := json.Marshal(idField)
-					if string(idBytes) == requestID {
+					msgID := string(idBytes)
+					if msgID == requestID {
 						// This is the response to our request - turn is complete
+						log.Printf("[HTTP:%s] ✓ Found matching response! Poll #%d, returning %d messages", params.SessionID[:8], pollCount, len(messages))
 						w.Header().Set("Content-Type", "application/json")
 						// Return all messages as a JSON array
 						w.Write([]byte("["))
@@ -146,14 +219,10 @@ func (s *Server) handleSessionPrompt(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
-
-		case <-timeout:
-			writeLLMError(w, errors.NewInternalError("agent response timeout after 30 seconds"), req.ID)
-			return
-		case <-r.Context().Done():
-			writeLLMError(w, errors.NewInternalError("request cancelled by client"), req.ID)
-			return
 		}
+
+		// Sleep briefly before checking again
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
