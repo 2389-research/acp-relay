@@ -179,23 +179,28 @@ class SessionSelectionScreen(ModalScreen):
 
     def compose(self) -> ComposeResult:
         with Container(id="session-dialog"):
-            yield Static("🔄 Resume or Create Session", id="session-title")
-            yield Static("\n[dim]Active Sessions:[/dim]")
+            yield Static("🔄 View or Create Session", id="session-title")
+            yield Static("\n[dim]Recent Sessions:[/dim]")
 
             if self.sessions:
-                session_list = "\n".join([
-                    f"[bold cyan]{i+1}.[/bold cyan] {s['id'][:12]}... [dim]({s['working_directory']}) - {s['created_at']}[/dim]"
-                    for i, s in enumerate(self.sessions[:10])
-                ])
+                session_lines = []
+                for i, s in enumerate(self.sessions[:15]):
+                    status_icon = "✅" if s.get('is_active') else "💤"
+                    status_text = "active" if s.get('is_active') else "closed"
+                    session_lines.append(
+                        f"[bold cyan]{i+1}.[/bold cyan] {status_icon} {s['id'][:12]}... "
+                        f"[dim]({status_text}) {s['created_at']}[/dim]"
+                    )
+                session_list = "\n".join(session_lines)
                 yield Static(session_list, id="session-list")
             else:
-                yield Static("\n[dim italic]No active sessions found[/dim italic]", id="session-list")
+                yield Static("\n[dim italic]No sessions found[/dim italic]", id="session-list")
 
             with Vertical(id="button-container"):
                 yield Button("Create New Session", id="new-session", variant="primary")
                 if self.sessions:
-                    yield Input(placeholder="Enter session number to resume (1-10)...", id="session-input")
-                    yield Button("Resume Selected", id="resume-session", variant="success")
+                    yield Input(placeholder="Enter session number (1-15)...", id="session-input")
+                    yield Button("Open Selected Session", id="resume-session", variant="success")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "new-session":
@@ -313,8 +318,8 @@ class ACPChatApp(App):
         self.title = "🤖 ACP Agent Chat"
         self.sub_title = "Starting..."
 
-        # Get active sessions from database
-        sessions = get_active_sessions()
+        # Get all sessions from database
+        sessions = get_all_sessions()
 
         # Show session selection modal using run_worker to ensure we're in worker context
         async def show_session_selector():
@@ -331,11 +336,16 @@ class ACPChatApp(App):
                     self.notify("Creating new session...")
                     await self.create_new_session()
                 elif result.get("action") == "resume":
-                    # Resume existing session
+                    # Open existing session (view or resume)
                     session = result.get("session")
-                    self.notify(f"Resuming session: {session}")  # Debug
+                    self.notify(f"Opening session: {session}")  # Debug
                     if session:
-                        await self.resume_session(session)
+                        if session.get("is_active"):
+                            # Try to resume active session
+                            await self.resume_session(session)
+                        else:
+                            # View closed session (read-only)
+                            await self.view_session(session)
                     else:
                         self.notify("Session data missing, creating new session", severity="warning")
                         await self.create_new_session()
@@ -387,13 +397,35 @@ class ACPChatApp(App):
             self.update_status(f"❌ Error: {e}")
             self.notify(f"Failed to connect: {e}", severity="error")
 
+    async def view_session(self, session: dict):
+        """View a closed session (read-only mode)"""
+        self.session_id = session["id"]
+        self.sub_title = f"Viewing {self.session_id[:8]} (Read-Only)"
+
+        try:
+            self.update_status(f"Loading session history...")
+
+            # Load previous messages from database
+            await self.load_session_history()
+
+            self.sub_title = f"📖 {self.session_id[:8]} (Read-Only)"
+            self.update_status("👀 Viewing closed session (read-only)")
+
+            # Disable input for read-only mode
+            input_widget = self.query_one("#chat-input", Input)
+            input_widget.disabled = True
+            input_widget.placeholder = "Session is closed (read-only)"
+
+        except Exception as e:
+            self.update_status(f"❌ Error: {e}")
+            self.notify(f"Failed to load session: {e}", severity="error")
+
     async def resume_session(self, session: dict):
-        """Resume an existing session"""
+        """Resume an existing active session"""
         self.session_id = session["id"]
         self.sub_title = f"Resuming {self.session_id[:8]}..."
 
         input_widget = self.query_one("#chat-input", Input)
-        input_widget.focus()
 
         try:
             # Connect to relay server
@@ -410,15 +442,25 @@ class ACPChatApp(App):
 
             self.sub_title = f"Session: {self.session_id[:8]}"
             self.update_status("✅ Session resumed! (Ctrl+C to exit)")
+            input_widget.focus()
 
             # Start message receiver
             asyncio.create_task(self.receive_messages())
 
         except Exception as e:
-            self.update_status(f"❌ Error: {e}")
-            self.notify(f"Failed to resume session: {e}", severity="error")
-            import traceback
-            self.notify(f"Traceback: {traceback.format_exc()}", severity="error")
+            error_str = str(e)
+            # Check if this is a "session not found" error (stale session)
+            if "session" in error_str.lower() and ("not exist" in error_str.lower() or "not found" in error_str.lower()):
+                self.notify(f"Session is stale (no longer exists on server). Switching to read-only mode.", severity="warning")
+                # Mark session as closed in database
+                mark_session_closed(self.session_id, "stale/expired")
+                # Switch to view mode
+                await self.view_session(session)
+            else:
+                self.update_status(f"❌ Error: {e}")
+                self.notify(f"Failed to resume session: {e}", severity="error")
+                import traceback
+                self.notify(f"Traceback: {traceback.format_exc()}", severity="error")
 
     async def load_session_history(self):
         """Load previous messages from the database"""
@@ -761,16 +803,15 @@ class ACPChatApp(App):
         self.msg_id += 1
 
 
-def get_active_sessions():
-    """Get list of active sessions from the database"""
+def get_all_sessions():
+    """Get list of all sessions (active and closed) from the database"""
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.execute("""
             SELECT id, working_directory, created_at, closed_at
             FROM sessions
-            WHERE closed_at IS NULL
             ORDER BY created_at DESC
-            LIMIT 10
+            LIMIT 20
         """)
         sessions = []
         for row in cursor:
@@ -778,13 +819,31 @@ def get_active_sessions():
                 "id": row[0],
                 "working_directory": row[1],
                 "created_at": row[2],
-                "closed_at": row[3]
+                "closed_at": row[3],
+                "is_active": row[3] is None
             })
         conn.close()
         return sessions
     except (sqlite3.Error, FileNotFoundError):
         # If database doesn't exist or has errors, return empty list
         return []
+
+
+def mark_session_closed(session_id: str, reason: str = "stale"):
+    """Mark a session as closed in the database"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        from datetime import datetime
+        closed_at = datetime.now().isoformat()
+        conn.execute("""
+            UPDATE sessions
+            SET closed_at = ?
+            WHERE id = ?
+        """, (closed_at, session_id))
+        conn.commit()
+        conn.close()
+    except (sqlite3.Error, FileNotFoundError) as e:
+        print(f"Failed to mark session as closed: {e}")
 
 
 def main():
