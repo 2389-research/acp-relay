@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/harper/acp-relay/internal/config"
+	"github.com/harper/acp-relay/internal/db"
 	httpserver "github.com/harper/acp-relay/internal/http"
 	mgmtserver "github.com/harper/acp-relay/internal/management"
 	"github.com/harper/acp-relay/internal/session"
@@ -25,12 +26,19 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
+	// Open database for message logging
+	database, err := db.Open(cfg.Database.Path)
+	if err != nil {
+		log.Fatalf("failed to open database: %v", err)
+	}
+	defer database.Close()
+
 	// Create session manager
 	sessionMgr := session.NewManager(session.ManagerConfig{
 		AgentCommand: cfg.Agent.Command,
 		AgentArgs:    cfg.Agent.Args,
 		AgentEnv:     cfg.Agent.Env,
-	})
+	}, database)
 
 	// Create HTTP server
 	httpSrv := httpserver.NewServer(sessionMgr)

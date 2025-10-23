@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/harper/acp-relay/internal/db"
 )
 
 type ManagerConfig struct {
@@ -23,12 +24,14 @@ type Manager struct {
 	config   ManagerConfig
 	sessions map[string]*Session
 	mu       sync.RWMutex
+	db       *db.DB
 }
 
-func NewManager(cfg ManagerConfig) *Manager {
+func NewManager(cfg ManagerConfig, database *db.DB) *Manager {
 	return &Manager{
 		config:   cfg,
 		sessions: make(map[string]*Session),
+		db:       database,
 	}
 }
 
@@ -83,6 +86,15 @@ func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Sessio
 		FromAgent:   make(chan []byte, 10),
 		Context:     sessionCtx,
 		Cancel:      cancel,
+		DB:          m.db,
+	}
+
+	// Log session creation to database
+	if m.db != nil {
+		if err := m.db.CreateSession(sessionID, workingDir); err != nil {
+			cancel()
+			return nil, fmt.Errorf("failed to log session creation: %w", err)
+		}
 	}
 
 	m.mu.Lock()
@@ -116,6 +128,14 @@ func (m *Manager) CloseSession(sessionID string) error {
 	}
 	delete(m.sessions, sessionID)
 	m.mu.Unlock()
+
+	// Log session closure to database
+	if m.db != nil {
+		if err := m.db.CloseSession(sessionID); err != nil {
+			// Log error but don't fail the close operation
+			fmt.Printf("failed to log session closure: %v\n", err)
+		}
+	}
 
 	// Cancel context (kills process)
 	sess.Cancel()

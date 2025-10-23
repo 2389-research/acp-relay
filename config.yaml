@@ -15,3 +15,6 @@ agent:
     PATH: "${PATH}"
   startup_timeout_seconds: 10
   max_concurrent_sessions: 100
+
+database:
+  path: "./relay-messages.db"

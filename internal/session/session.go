@@ -10,6 +10,8 @@ import (
 	"log"
 	"os/exec"
 	"sync"
+
+	"github.com/harper/acp-relay/internal/db"
 )
 
 type Session struct {
@@ -24,6 +26,7 @@ type Session struct {
 	FromAgent      chan []byte
 	Context        context.Context
 	Cancel         context.CancelFunc
+	DB             *db.DB
 
 	// For HTTP: buffer messages from agent
 	MessageBuffer [][]byte
@@ -42,6 +45,14 @@ func (s *Session) StartStdioBridge() {
 				preview = preview[:100] + "..."
 			}
 			log.Printf("[%s] ToAgent #%d -> AgentStdin: %s", s.ID[:8], msgCount, preview)
+
+			// Log message to database
+			if s.DB != nil {
+				if err := s.DB.LogMessage(s.ID, db.DirectionRelayToAgent, msg); err != nil {
+					log.Printf("[%s] failed to log relay->agent message: %v", s.ID[:8], err)
+				}
+			}
+
 			if _, err := s.AgentStdin.Write(msg); err != nil {
 				log.Printf("[%s] error writing to agent stdin: %v", s.ID[:8], err)
 				return
@@ -68,6 +79,13 @@ func (s *Session) StartStdioBridge() {
 				preview = preview[:100] + "..."
 			}
 			log.Printf("[%s] AgentStdout->FromAgent #%d: %s", s.ID[:8], messageCount, preview)
+
+			// Log message to database
+			if s.DB != nil {
+				if err := s.DB.LogMessage(s.ID, db.DirectionAgentToRelay, msg); err != nil {
+					log.Printf("[%s] failed to log agent->relay message: %v", s.ID[:8], err)
+				}
+			}
 
 			select {
 			case s.FromAgent <- msg:

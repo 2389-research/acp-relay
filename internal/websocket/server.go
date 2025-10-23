@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
+	"github.com/harper/acp-relay/internal/db"
 	"github.com/harper/acp-relay/internal/errors"
 	"github.com/harper/acp-relay/internal/jsonrpc"
 	"github.com/harper/acp-relay/internal/session"
@@ -52,6 +53,13 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 		for {
 			select {
 			case msg := <-fromAgent:
+				// Log relay->client message
+				if currentSession != nil && currentSession.DB != nil {
+					if err := currentSession.DB.LogMessage(currentSession.ID, db.DirectionRelayToClient, msg); err != nil {
+						log.Printf("[WS:%s] failed to log relay->client message: %v", currentSession.ID[:8], err)
+					}
+				}
+
 				if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
 					log.Printf("websocket write error: %v", err)
 					return
@@ -68,6 +76,13 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 		if err != nil {
 			log.Printf("websocket read error: %v", err)
 			break
+		}
+
+		// Log client->relay message
+		if currentSession != nil && currentSession.DB != nil {
+			if err := currentSession.DB.LogMessage(currentSession.ID, db.DirectionClientToRelay, message); err != nil {
+				log.Printf("[WS:%s] failed to log client->relay message: %v", currentSession.ID[:8], err)
+			}
 		}
 
 		// Check if this is a request (has "method") or response (no "method")

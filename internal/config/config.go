@@ -8,8 +8,13 @@ import (
 )
 
 type Config struct {
-	Server ServerConfig `mapstructure:"server"`
-	Agent  AgentConfig  `mapstructure:"agent"`
+	Server   ServerConfig   `mapstructure:"server"`
+	Agent    AgentConfig    `mapstructure:"agent"`
+	Database DatabaseConfig `mapstructure:"database"`
+}
+
+type DatabaseConfig struct {
+	Path string `mapstructure:"path"`
 }
 
 type ServerConfig struct {
