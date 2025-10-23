@@ -451,10 +451,12 @@ class ACPChatApp(App):
             error_str = str(e)
             # Check if this is a "session not found" error (stale session)
             if "session" in error_str.lower() and ("not exist" in error_str.lower() or "not found" in error_str.lower()):
-                self.notify(f"Session is stale (no longer exists on server). Switching to read-only mode.", severity="warning")
-                # Mark session as closed in database
+                # Session is stale - mark as closed and view in read-only mode
                 mark_session_closed(self.session_id, "stale/expired")
-                # Switch to view mode
+                # Update session dict to reflect closed status
+                session["is_active"] = False
+                session["closed_at"] = "stale"
+                # Switch to view mode silently
                 await self.view_session(session)
             else:
                 self.update_status(f"❌ Error: {e}")
