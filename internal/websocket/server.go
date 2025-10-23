@@ -70,6 +70,27 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			break
 		}
 
+		// Check if this is a request (has "method") or response (no "method")
+		var msgType struct {
+			Method string `json:"method"`
+			ID     int    `json:"id"`
+		}
+		json.Unmarshal(message, &msgType)
+
+		// If no method field, this is a response from the client - forward to agent
+		if msgType.Method == "" {
+			if currentSession != nil {
+				preview := string(message)
+				if len(preview) > 100 {
+					preview = preview[:100] + "..."
+				}
+				log.Printf("[WS:%s] Client response (id=%d) -> Agent: %s", currentSession.ID[:8], msgType.ID, preview)
+				currentSession.ToAgent <- append(message, '\n')
+			}
+			continue
+		}
+
+		// Parse as request
 		var req jsonrpc.Request
 		if err := json.Unmarshal(message, &req); err != nil {
 			s.sendLLMError(conn, errors.NewParseError(err.Error()), nil)
