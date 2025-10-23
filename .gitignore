@@ -17,3 +17,6 @@ __pycache__/
 
 # Temporary files
 output.txt
+
+# Worktrees
+.worktrees/
