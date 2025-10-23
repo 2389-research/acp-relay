@@ -206,6 +206,67 @@ acp-relay/
 - `startup_timeout_seconds`: Time to wait for agent startup (default: 10)
 - `max_concurrent_sessions`: Maximum number of concurrent sessions (default: 100)
 
+## Container Mode
+
+The ACP Relay Server supports running agents in Docker containers for isolation and reproducibility.
+
+### Prerequisites
+
+- Docker installed and running
+- Docker image built: `docker build -t acp-relay-agent:latest .`
+
+### Configuration
+
+Set `agent.mode: "container"` in config.yaml:
+
+```yaml
+agent:
+  mode: "container"
+  env:
+    ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+
+  container:
+    image: "acp-relay-agent:latest"
+    docker_host: "unix:///var/run/docker.sock"
+    network_mode: "bridge"
+    memory_limit: "512m"
+    cpu_limit: 1.0
+    workspace_host_base: "/tmp/acp-workspaces"
+    workspace_container_path: "/workspace"
+    auto_remove: true
+    startup_timeout_seconds: 10
+```
+
+### Building the Image
+
+```bash
+docker build -t acp-relay-agent:latest .
+```
+
+### Running
+
+```bash
+./acp-relay --config config.yaml
+```
+
+Sessions will be created in Docker containers with isolated workspaces.
+
+### Troubleshooting
+
+**"Cannot connect to Docker daemon"**
+- Verify Docker is running: `docker ps`
+- Check Docker socket path in config
+
+**"Docker image not found"**
+- Build the image: `docker build -t acp-relay-agent:latest .`
+- Verify it exists: `docker images | grep acp-relay-agent`
+
+**"Container exits immediately"**
+- Check container logs: `docker logs <container-id>`
+- Verify environment variables are set
+
+See [docs/container-mode.md](docs/container-mode.md) for detailed documentation.
+
 ## Error Handling
 
 The ACP Relay Server provides LLM-optimized error messages that include:
