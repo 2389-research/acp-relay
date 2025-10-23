@@ -228,7 +228,7 @@ To verify everything is working:
 
 2. **Verify image exists:**
    ```bash
-   docker images | grep acp-relay-agent
+   docker images | grep acp-relay-runtime
    ```
 
 3. **Test environment variable:**
@@ -242,7 +242,18 @@ To verify everything is working:
    ./acp-relay -config config-container-test.yaml
    ```
 
-5. **Create a test session** via WebSocket or HTTP to see the environment variable logging
+5. **Run the integration test:**
+   ```bash
+   # The integration test creates a session and has the agent create a datestamp.py script
+   python tests/integration_container_test.py
+   ```
+
+   This test verifies:
+   - WebSocket connection to the relay
+   - Container session creation
+   - Agent receives and processes prompts
+   - Files created by the agent are accessible
+   - Scripts execute correctly
 
 ## Environment Variable Template Expansion
 
