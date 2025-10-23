@@ -307,15 +307,17 @@ class ACPChatApp(App):
         # Get active sessions from database
         sessions = get_active_sessions()
 
-        # Show session selection modal
-        result = await self.push_screen_wait(SessionSelectionScreen(sessions))
+        # Show session selection modal using call_later to ensure we're in worker context
+        async def show_session_selector():
+            result = await self.push_screen_wait(SessionSelectionScreen(sessions))
+            if result["action"] == "new":
+                # Create new session
+                await self.create_new_session()
+            elif result["action"] == "resume":
+                # Resume existing session
+                await self.resume_session(result["session"])
 
-        if result["action"] == "new":
-            # Create new session
-            await self.create_new_session()
-        elif result["action"] == "resume":
-            # Resume existing session
-            await self.resume_session(result["session"])
+        self.call_later(show_session_selector)
 
     async def create_new_session(self):
         """Create a new session"""
