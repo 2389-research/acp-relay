@@ -1,7 +1,19 @@
-relay
+# Binaries
+/acp-relay
+/relay
+/main
+
+# Databases
 *.db
 *.db-shm
 *.db-wal
-relay-*
+
+# Database files (but allow schema.sql)
+relay-messages.*
+
+# Python
 __pycache__/
 *.pyc
+
+# Temporary files
+output.txt

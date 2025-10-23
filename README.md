@@ -73,7 +73,9 @@ Build the relay server:
 ```bash
 git clone https://github.com/harper/acp-relay
 cd acp-relay
-go build -o acp-relay ./cmd/relay
+make build
+# Or manually:
+# go build -o acp-relay ./cmd/relay
 ```
 
 ### Configuration
