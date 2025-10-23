@@ -18,15 +18,20 @@ type Session struct {
 	ID             string
 	AgentSessionID string // The session ID from the ACP agent
 	WorkingDir     string
-	AgentCmd       *exec.Cmd
-	AgentStdin     io.WriteCloser
-	AgentStdout    io.ReadCloser
-	AgentStderr    io.ReadCloser
-	ToAgent        chan []byte
-	FromAgent      chan []byte
-	Context        context.Context
-	Cancel         context.CancelFunc
-	DB             *db.DB
+	ContainerID    string // Docker container ID (empty for process mode)
+
+	// Process mode fields (nil in container mode)
+	AgentCmd *exec.Cmd
+
+	// Common fields (both modes)
+	AgentStdin  io.WriteCloser
+	AgentStdout io.ReadCloser
+	AgentStderr io.ReadCloser
+	ToAgent     chan []byte
+	FromAgent   chan []byte
+	Context     context.Context
+	Cancel      context.CancelFunc
+	DB          *db.DB
 
 	// For HTTP: buffer messages from agent
 	MessageBuffer [][]byte

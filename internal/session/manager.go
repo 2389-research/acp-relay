@@ -6,38 +6,58 @@ package session
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/harper/acp-relay/internal/config"
+	"github.com/harper/acp-relay/internal/container"
 	"github.com/harper/acp-relay/internal/db"
 )
 
 type ManagerConfig struct {
-	AgentCommand string
-	AgentArgs    []string
-	AgentEnv     map[string]string
+	Mode            string                 // "process" or "container"
+	AgentCommand    string
+	AgentArgs       []string
+	AgentEnv        map[string]string
+	ContainerConfig config.ContainerConfig
 }
 
 type Manager struct {
-	config   ManagerConfig
-	sessions map[string]*Session
-	mu       sync.RWMutex
-	db       *db.DB
+	config           ManagerConfig
+	sessions         map[string]*Session
+	mu               sync.RWMutex
+	db               *db.DB
+	containerManager *container.Manager // optional container manager
 }
 
 func NewManager(cfg ManagerConfig, database *db.DB) *Manager {
-	return &Manager{
+	m := &Manager{
 		config:   cfg,
 		sessions: make(map[string]*Session),
 		db:       database,
 	}
+
+	// Initialize container manager if mode is "container"
+	if cfg.Mode == "container" {
+		containerMgr, err := container.NewManager(
+			cfg.ContainerConfig,
+			cfg.AgentEnv,
+			database,
+		)
+		if err != nil {
+			log.Fatalf("Failed to initialize container manager: %v", err)
+		}
+		m.containerManager = containerMgr
+		log.Printf("Container manager initialized (image: %s)", cfg.ContainerConfig.Image)
+	}
+
+	return m
 }
 
-func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Session, error) {
-	sessionID := "sess_" + uuid.New().String()[:8]
-
+func (m *Manager) createProcessSession(ctx context.Context, sessionID, workingDir string) (*Session, error) {
 	sessionCtx, cancel := context.WithCancel(ctx)
 
 	// Create agent command
@@ -97,29 +117,83 @@ func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Sessio
 		}
 	}
 
+	return sess, nil
+}
+
+func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Session, error) {
+	sessionID := "sess_" + uuid.New().String()[:8]
+
+	var sess *Session
+	var err error
+
+	// Route based on mode
+	if m.config.Mode == "container" {
+		log.Printf("[%s] Creating container session (image: %s)", sessionID, m.config.ContainerConfig.Image)
+
+		// Get container components
+		components, err := m.containerManager.CreateSession(ctx, sessionID, workingDir)
+		if err != nil {
+			return nil, err
+		}
+
+		// Create context with cancel for container session
+		sessionCtx, cancel := context.WithCancel(ctx)
+
+		// Assemble Session from components
+		sess = &Session{
+			ID:          sessionID,
+			WorkingDir:  workingDir,
+			ContainerID: components.ContainerID,
+			AgentStdin:  components.Stdin,
+			AgentStdout: components.Stdout,
+			AgentStderr: components.Stderr,
+			ToAgent:     make(chan []byte, 10),
+			FromAgent:   make(chan []byte, 10),
+			Context:     sessionCtx,
+			Cancel:      cancel,
+			DB:          m.db,
+		}
+
+		// Log session creation to database
+		if m.db != nil {
+			if err := m.db.CreateSession(sessionID, workingDir); err != nil {
+				return nil, fmt.Errorf("failed to log session creation: %w", err)
+			}
+		}
+	} else {
+		log.Printf("[%s] Creating process session (command: %s)", sessionID, m.config.AgentCommand)
+		sess, err = m.createProcessSession(ctx, sessionID, workingDir)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Common initialization (same for both modes)
 	m.mu.Lock()
 	m.sessions[sessionID] = sess
 	m.mu.Unlock()
 
-	// Start stdio bridge
+	// Start stdio bridge (works for both modes)
 	go sess.StartStdioBridge()
 
-	// Send initialize message to agent (required by ACP protocol)
+	// Send ACP initialize
 	if err := sess.SendInitialize(); err != nil {
 		m.CloseSession(sessionID)
 		return nil, fmt.Errorf("failed to initialize agent: %w", err)
 	}
 
-	// Send session/new to agent and get their session ID
+	// Send session/new to agent
 	if err := sess.SendSessionNew(workingDir); err != nil {
 		m.CloseSession(sessionID)
 		return nil, fmt.Errorf("failed to create agent session: %w", err)
 	}
 
+	log.Printf("[%s] Session ready (mode: %s)", sessionID, m.config.Mode)
 	return sess, nil
 }
 
 func (m *Manager) CloseSession(sessionID string) error {
+	// Common cleanup: remove session from map (both modes)
 	m.mu.Lock()
 	sess, exists := m.sessions[sessionID]
 	if !exists {
@@ -137,6 +211,15 @@ func (m *Manager) CloseSession(sessionID string) error {
 		}
 	}
 
+	// Mode-specific cleanup
+	if m.config.Mode == "container" {
+		// Cancel context to signal goroutines to stop
+		sess.Cancel()
+		// Delegate container cleanup to container manager
+		return m.containerManager.StopContainer(sessionID)
+	}
+
+	// Process mode cleanup
 	// Cancel context (kills process)
 	sess.Cancel()
 
