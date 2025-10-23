@@ -142,6 +142,36 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			result := map[string]interface{}{"sessionId": sess.ID}
 			s.sendResponse(conn, result, req.ID)
 
+		case "session/resume":
+			var params struct {
+				SessionID string `json:"sessionId"`
+			}
+			if err := json.Unmarshal(req.Params, &params); err != nil {
+				s.sendLLMError(conn, errors.NewInvalidParamsError("sessionId", "string", "invalid or missing"), req.ID)
+				continue
+			}
+
+			// Try to get existing session
+			sess, exists := s.sessionMgr.GetSession(params.SessionID)
+			if !exists {
+				s.sendLLMError(conn, errors.NewSessionNotFoundError(params.SessionID), req.ID)
+				continue
+			}
+
+			currentSession = sess
+			log.Printf("[WS:%s] Client resuming session", sess.ID[:8])
+
+			// Start forwarding agent messages to WebSocket
+			go func() {
+				for msg := range sess.FromAgent {
+					fromAgent <- msg
+				}
+			}()
+
+			// Send response with session ID
+			result := map[string]interface{}{"sessionId": sess.ID}
+			s.sendResponse(conn, result, req.ID)
+
 		case "session/prompt":
 			// Forward to agent, translating "content" to "prompt" per ACP spec
 			if currentSession == nil {
@@ -189,9 +219,10 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 		}
 	}
 
-	// Cleanup
+	// Cleanup: Don't close the session, just detach from it
+	// This allows the session to be resumed later
 	if currentSession != nil {
-		s.sessionMgr.CloseSession(currentSession.ID)
+		log.Printf("[WS:%s] Client disconnected, session remains active for resumption", currentSession.ID[:8])
 	}
 }
 
