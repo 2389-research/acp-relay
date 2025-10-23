@@ -168,6 +168,15 @@ class SessionSelectionScreen(ModalScreen):
         self.sessions = sessions
         super().__init__()
 
+    def on_mount(self) -> None:
+        """Focus the input when modal opens"""
+        if self.sessions:
+            try:
+                input_widget = self.query_one("#session-input", Input)
+                input_widget.focus()
+            except:
+                pass
+
     def compose(self) -> ComposeResult:
         with Container(id="session-dialog"):
             yield Static("🔄 Resume or Create Session", id="session-title")
@@ -312,16 +321,25 @@ class ACPChatApp(App):
             result = await self.push_screen_wait(SessionSelectionScreen(sessions))
             self.notify(f"Session selection result: {result}")  # Debug
 
-            if result and result.get("action") == "new":
+            if not result:
+                # Modal was dismissed without selection - default to creating new session
+                self.notify("No selection made, creating new session", severity="warning")
+                await self.create_new_session()
+            elif result.get("action") == "new":
                 # Create new session
                 await self.create_new_session()
-            elif result and result.get("action") == "resume":
+            elif result.get("action") == "resume":
                 # Resume existing session
                 session = result.get("session")
                 self.notify(f"Resuming session: {session}")  # Debug
-                await self.resume_session(session)
+                if session:
+                    await self.resume_session(session)
+                else:
+                    self.notify("Session data missing, creating new session", severity="warning")
+                    await self.create_new_session()
             else:
-                self.notify(f"Unexpected result: {result}", severity="warning")
+                self.notify(f"Unexpected result: {result}, creating new session", severity="warning")
+                await self.create_new_session()
 
         self.run_worker(show_session_selector, exclusive=True)
 
