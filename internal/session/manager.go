@@ -159,6 +159,8 @@ func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Sessio
 		// Log session creation to database
 		if m.db != nil {
 			if err := m.db.CreateSession(sessionID, workingDir); err != nil {
+				cancel()  // Clean up context
+				m.containerManager.StopContainer(sessionID)  // Clean up container
 				return nil, fmt.Errorf("failed to log session creation: %w", err)
 			}
 		}
