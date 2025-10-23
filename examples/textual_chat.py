@@ -318,27 +318,35 @@ class ACPChatApp(App):
 
         # Show session selection modal using run_worker to ensure we're in worker context
         async def show_session_selector():
-            result = await self.push_screen_wait(SessionSelectionScreen(sessions))
-            self.notify(f"Session selection result: {result}")  # Debug
+            try:
+                result = await self.push_screen_wait(SessionSelectionScreen(sessions))
+                self.notify(f"Session selection result: {result}")  # Debug
 
-            if not result:
-                # Modal was dismissed without selection - default to creating new session
-                self.notify("No selection made, creating new session", severity="warning")
-                await self.create_new_session()
-            elif result.get("action") == "new":
-                # Create new session
-                await self.create_new_session()
-            elif result.get("action") == "resume":
-                # Resume existing session
-                session = result.get("session")
-                self.notify(f"Resuming session: {session}")  # Debug
-                if session:
-                    await self.resume_session(session)
-                else:
-                    self.notify("Session data missing, creating new session", severity="warning")
+                if not result:
+                    # Modal was dismissed without selection - default to creating new session
+                    self.notify("No selection made, creating new session", severity="warning")
                     await self.create_new_session()
-            else:
-                self.notify(f"Unexpected result: {result}, creating new session", severity="warning")
+                elif result.get("action") == "new":
+                    # Create new session
+                    self.notify("Creating new session...")
+                    await self.create_new_session()
+                elif result.get("action") == "resume":
+                    # Resume existing session
+                    session = result.get("session")
+                    self.notify(f"Resuming session: {session}")  # Debug
+                    if session:
+                        await self.resume_session(session)
+                    else:
+                        self.notify("Session data missing, creating new session", severity="warning")
+                        await self.create_new_session()
+                else:
+                    self.notify(f"Unexpected result: {result}, creating new session", severity="warning")
+                    await self.create_new_session()
+            except Exception as e:
+                self.notify(f"Error in session selector: {e}", severity="error")
+                import traceback
+                self.log(traceback.format_exc())
+                # Fallback to creating new session
                 await self.create_new_session()
 
         self.run_worker(show_session_selector, exclusive=True)
@@ -713,6 +721,12 @@ class ACPChatApp(App):
         """Handle user input submission"""
         user_input = event.value.strip()
         if not user_input:
+            return
+
+        # Check if session is ready
+        if not self.session_id or not self.websocket:
+            self.notify("Session not ready yet, please wait...", severity="warning")
+            event.input.value = ""
             return
 
         # Clear input
