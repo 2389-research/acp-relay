@@ -40,9 +40,9 @@ except ImportError:
 
 
 class ACPIntegrationTest:
-    def __init__(self, ws_url="ws://localhost:8081", working_dir="/tmp/acp-test"):
+    def __init__(self, ws_url="ws://localhost:8081", workspace_base="/tmp/acp-workspaces"):
         self.ws_url = ws_url
-        self.working_dir = working_dir
+        self.workspace_base = workspace_base
         self.session_id = None
         self.msg_id = 0
 
@@ -94,9 +94,6 @@ class ACPIntegrationTest:
         print("=" * 60)
         print()
 
-        # Ensure working directory exists
-        Path(self.working_dir).mkdir(parents=True, exist_ok=True)
-
         try:
             print(f"Connecting to {self.ws_url}...")
             async with websockets.connect(self.ws_url) as ws:
@@ -105,8 +102,10 @@ class ACPIntegrationTest:
 
                 # Step 1: Create new session
                 print("Step 1: Creating new session...")
+                # Note: workingDirectory can be anything - it's not used in container mode
+                # The container workspace is always mounted at workspace_host_base/session_id
                 result = await self.send_request(ws, "session/new", {
-                    "workingDirectory": self.working_dir
+                    "workingDirectory": "/tmp/test"
                 })
                 self.session_id = result["sessionId"]
                 print(f"✓ Session created: {self.session_id}")
@@ -141,7 +140,12 @@ self-contained."""
                 # Step 3: Verify the file was created
                 print()
                 print("Step 3: Verifying datestamp.py was created...")
-                expected_file = Path(self.working_dir) / "datestamp.py"
+                # File is created in the container workspace which is mounted at:
+                # {workspace_base}/{session_id}/datestamp.py
+                workspace_dir = Path(self.workspace_base) / self.session_id
+                expected_file = workspace_dir / "datestamp.py"
+
+                print(f"  Looking for file at: {expected_file}")
 
                 if expected_file.exists():
                     print(f"✓ File created: {expected_file}")
@@ -179,7 +183,10 @@ self-contained."""
                         return False
                 else:
                     print(f"✗ File not created: {expected_file}")
-                    print(f"  Files in directory: {list(Path(self.working_dir).iterdir())}")
+                    if workspace_dir.exists():
+                        print(f"  Files in workspace: {list(workspace_dir.iterdir())}")
+                    else:
+                        print(f"  Workspace directory doesn't exist: {workspace_dir}")
                     return False
 
                 print()
