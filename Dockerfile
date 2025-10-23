@@ -1,18 +1,21 @@
-# ABOUTME: Docker image for running ACP agents in isolated containers
-# ABOUTME: Installs Node.js, git, curl, and @zed-industries/claude-code-acp agent
+# ABOUTME: Generic runtime image for ACP agents in isolated containers
+# ABOUTME: Provides Node.js, Python, git, and common tools - agent command configured at runtime
 FROM node:20-slim
 
-# Install dependencies the agent might need
+# Install runtimes and tools that agents commonly need
 RUN apt-get update && apt-get install -y \
     git \
     curl \
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up working directory
 WORKDIR /workspace
 
-# Install the ACP agent globally
-RUN npm install -g @zed-industries/claude-code-acp
-
-# The agent expects stdio communication
-ENTRYPOINT ["npx", "@zed-industries/claude-code-acp"]
+# No ENTRYPOINT or CMD - command comes from container config at runtime
+# This allows one image to run multiple agent types:
+#   - npx @zed-industries/claude-code-acp
+#   - python -m my_custom_agent
+#   - /usr/local/bin/codex-agent
+# The relay's container.Config.Cmd will specify which agent to run

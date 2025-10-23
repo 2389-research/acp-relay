@@ -44,6 +44,8 @@ func NewManager(cfg ManagerConfig, database *db.DB) *Manager {
 	if cfg.Mode == "container" {
 		containerMgr, err := container.NewManager(
 			cfg.ContainerConfig,
+			cfg.AgentCommand,
+			cfg.AgentArgs,
 			cfg.AgentEnv,
 			database,
 		)
@@ -51,7 +53,7 @@ func NewManager(cfg ManagerConfig, database *db.DB) *Manager {
 			log.Fatalf("Failed to initialize container manager: %v", err)
 		}
 		m.containerManager = containerMgr
-		log.Printf("Container manager initialized (image: %s)", cfg.ContainerConfig.Image)
+		log.Printf("Container manager initialized (image: %s, command: %s)", cfg.ContainerConfig.Image, cfg.AgentCommand)
 	}
 
 	return m

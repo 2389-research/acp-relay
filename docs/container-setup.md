@@ -25,13 +25,18 @@ To make it permanent, add to your `~/.bashrc`, `~/.zshrc`, or equivalent:
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
-### 2. Build the container image
+### 2. Build the runtime image
 
 ```bash
-docker build -t acp-relay-agent:latest .
+docker build -t acp-relay-runtime:latest .
 ```
 
-This creates a Docker image with Node.js and the Claude Code ACP agent.
+This creates a **generic runtime image** with Node.js, Python, git, and common tools. The specific agent command is configured at runtime via config.yaml, not baked into the image.
+
+**One image, multiple agents!** The same runtime image can run:
+- Claude Code: `npx @zed-industries/claude-code-acp`
+- Codex agent: `python -m codex_agent`
+- Custom agents: `/usr/local/bin/my-agent`
 
 ### 3. Configure the relay
 
@@ -40,13 +45,16 @@ Edit `config-container-test.yaml` or create your own config:
 ```yaml
 agent:
   mode: "container"
+  command: "npx"  # Runtime command (not baked into image)
+  args:
+    - "@zed-industries/claude-code-acp"
   env:
     ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"  # Expands from environment
     HOME: "${HOME}"
     PATH: "${PATH}"
 
   container:
-    image: "acp-relay-agent:latest"
+    image: "acp-relay-runtime:latest"  # Generic runtime image
     docker_host: "unix:///var/run/docker.sock"  # Docker Desktop
     # OR for Colima:
     # docker_host: "unix:///Users/YOUR_USERNAME/.config/colima/docker.sock"

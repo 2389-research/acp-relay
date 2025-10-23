@@ -36,6 +36,8 @@ type SessionComponents struct {
 
 type Manager struct {
 	config       config.ContainerConfig
+	agentCommand string
+	agentArgs    []string
 	agentEnv     map[string]string
 	dockerClient *client.Client
 	containers   map[string]*ContainerInfo // sessionID -> container info
@@ -43,7 +45,7 @@ type Manager struct {
 	db           *db.DB
 }
 
-func NewManager(cfg config.ContainerConfig, agentEnv map[string]string, database *db.DB) (*Manager, error) {
+func NewManager(cfg config.ContainerConfig, agentCommand string, agentArgs []string, agentEnv map[string]string, database *db.DB) (*Manager, error) {
 	// Initialize Docker client
 	dockerClient, err := client.NewClientWithOpts(
 		client.WithHost(cfg.DockerHost),
@@ -70,6 +72,8 @@ func NewManager(cfg config.ContainerConfig, agentEnv map[string]string, database
 
 	return &Manager{
 		config:       cfg,
+		agentCommand: agentCommand,
+		agentArgs:    agentArgs,
 		agentEnv:     agentEnv,
 		dockerClient: dockerClient,
 		containers:   make(map[string]*ContainerInfo),
@@ -100,9 +104,13 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 		}
 	}
 
-	// 3. Create container config
+	// 3. Create container config with runtime command
+	cmd := append([]string{m.agentCommand}, m.agentArgs...)
+	log.Printf("[%s] Container command: %v", sessionID, cmd)
+
 	containerConfig := &container.Config{
 		Image:     m.config.Image,
+		Cmd:       cmd, // Runtime command override (not baked into image)
 		Env:       envVars,
 		Tty:       false, // CRITICAL: must be false for stream demuxing
 		OpenStdin: true,

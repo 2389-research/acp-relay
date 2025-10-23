@@ -8,6 +8,9 @@ server:
 
 agent:
     mode: "container"
+    command: "npx"  # Runtime command (not baked into image)
+    args:
+        - "@zed-industries/claude-code-acp"
     env:
         ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
         HOME: "${HOME}"
@@ -16,7 +19,7 @@ agent:
     max_concurrent_sessions: 100
 
     container:
-        image: "acp-relay-agent:latest"
+        image: "acp-relay-runtime:latest"  # Generic runtime, agent specified via command/args
         docker_host: "unix:///Users/harper/.config/colima/docker.sock"
         network_mode: "bridge"
         memory_limit: "512m"
