@@ -117,13 +117,16 @@ class ACPIntegrationTest:
 
                 # Step 2: Send prompt to create date stamp script
                 print("Step 2: Sending prompt to create date stamp script...")
-                prompt_content = {
-                    "type": "text",
-                    "text": """Create a Python script named 'datestamp.py' that outputs today's date
+                # Note: content must be an array per ACP spec
+                prompt_content = [
+                    {
+                        "type": "text",
+                        "text": """Create a Python script named 'datestamp.py' that outputs today's date
 with seconds in this format: 'YYYY-MM-DD HH:MM:SS'. The script should use
 datetime.datetime.now() and print the formatted date. Make it simple and
 self-contained."""
-                }
+                    }
+                ]
 
                 result = await self.send_request(ws, "session/prompt", {
                     "sessionId": self.session_id,
