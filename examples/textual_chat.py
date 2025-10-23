@@ -22,7 +22,7 @@ import sqlite3
 from datetime import datetime
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical, ScrollableContainer
-from textual.widgets import Header, Footer, Input, Static, RichLog, Button, ListView, ListItem, Label
+from textual.widgets import Header, Footer, Input, Static, RichLog, Button, ListView, ListItem, Label, ProgressBar
 from textual.binding import Binding
 from textual.message import Message
 from textual.screen import ModalScreen
@@ -265,6 +265,15 @@ class ACPChatApp(App):
         padding: 0 1;
         height: 1;
     }
+
+    #agent-progress {
+        height: 1;
+        display: none;
+    }
+
+    #agent-progress.visible {
+        display: block;
+    }
     """
 
     BINDINGS = [
@@ -286,6 +295,7 @@ class ACPChatApp(App):
             yield ScrollableContainer(id="messages")
         with Vertical(id="input-container"):
             yield Static("", id="status")
+            yield ProgressBar(id="agent-progress", show_eta=False, show_percentage=False)
             yield Input(placeholder="Type your message here...", id="chat-input")
         yield Footer()
 
@@ -446,6 +456,24 @@ class ACPChatApp(App):
         status = self.query_one("#status", Static)
         status.update(text)
 
+    def show_progress(self):
+        """Show progress bar when agent is working"""
+        progress = self.query_one("#agent-progress", ProgressBar)
+        progress.add_class("visible")
+        progress.update(total=100, progress=0)
+
+    def hide_progress(self):
+        """Hide progress bar when agent is done"""
+        progress = self.query_one("#agent-progress", ProgressBar)
+        progress.remove_class("visible")
+
+    def advance_progress(self, amount: float = 5.0):
+        """Advance the progress bar by a small amount"""
+        progress = self.query_one("#agent-progress", ProgressBar)
+        if progress.has_class("visible"):
+            # Advance progress, wrapping around if it exceeds 100
+            progress.advance(amount)
+
     def add_user_message(self, text: str):
         """Add a user message to the chat"""
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -581,6 +609,7 @@ class ACPChatApp(App):
                                 text = update["content"]["text"]
                                 self.current_response += text
                                 self.update_agent_typing(self.current_response)
+                                self.advance_progress(2.0)  # Advance progress bar slightly with each chunk
                                 handled = True
 
                         # Handler: Available commands update
@@ -624,6 +653,7 @@ class ACPChatApp(App):
                 # Handler: Final response (turn complete)
                 elif "id" in msg and msg["id"] >= 2:  # Response to our prompt
                     self.stop_agent_typing()
+                    self.hide_progress()
                     self.update_status("✅ Ready to chat! (Ctrl+C to exit)")
 
                     if "error" in msg:
@@ -658,8 +688,9 @@ class ACPChatApp(App):
         # Add user message to chat
         self.add_user_message(user_input)
 
-        # Update status
+        # Update status and show progress bar
         self.update_status("🤖 Agent is thinking...")
+        self.show_progress()
 
         # Start agent typing indicator
         self.current_response = ""
