@@ -299,7 +299,7 @@ class ACPChatApp(App):
             yield Input(placeholder="Type your message here...", id="chat-input")
         yield Footer()
 
-    async def on_mount(self) -> None:
+    def on_mount(self) -> None:
         """Initialize the app with session selection"""
         self.title = "🤖 ACP Agent Chat"
         self.sub_title = "Starting..."
@@ -307,7 +307,7 @@ class ACPChatApp(App):
         # Get active sessions from database
         sessions = get_active_sessions()
 
-        # Show session selection modal using call_later to ensure we're in worker context
+        # Show session selection modal using run_worker to ensure we're in worker context
         async def show_session_selector():
             result = await self.push_screen_wait(SessionSelectionScreen(sessions))
             if result["action"] == "new":
@@ -317,7 +317,7 @@ class ACPChatApp(App):
                 # Resume existing session
                 await self.resume_session(result["session"])
 
-        self.call_later(show_session_selector)
+        self.run_worker(show_session_selector, exclusive=True)
 
     async def create_new_session(self):
         """Create a new session"""
