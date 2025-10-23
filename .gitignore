@@ -3,3 +3,5 @@ relay
 *.db-shm
 *.db-wal
 relay-*
+__pycache__/
+*.pyc
