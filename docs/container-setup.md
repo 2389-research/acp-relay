@@ -243,8 +243,21 @@ To verify everything is working:
    ```
 
 5. **Run the integration test:**
+
+   **Easy way** (recommended):
    ```bash
-   # The integration test creates a session and has the agent create a datestamp.py script
+   # Helper script that starts relay, runs test, and cleans up
+   export ANTHROPIC_API_KEY="sk-ant-your-key-here"
+   ./scripts/run-integration-test.sh
+   ```
+
+   **Manual way**:
+   ```bash
+   # Start relay in one terminal
+   export ANTHROPIC_API_KEY="sk-ant-your-key-here"
+   ./acp-relay -config config-container-test.yaml
+
+   # Run test in another terminal
    python tests/integration_container_test.py
    ```
 
