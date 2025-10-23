@@ -13,8 +13,8 @@ agent:
         - "@zed-industries/claude-code-acp"
     env:
         ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
-        HOME: "${HOME}"
-        PATH: "${PATH}"
+        HOME: "/root"  # Container home directory
+        PATH: "/usr/local/bin:/usr/bin:/bin"  # Container PATH
     startup_timeout_seconds: 10
     max_concurrent_sessions: 100
 

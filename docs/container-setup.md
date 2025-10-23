@@ -52,9 +52,9 @@ agent:
   args:
     - "@zed-industries/claude-code-acp"
   env:
-    ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"  # Expands from environment
-    HOME: "${HOME}"
-    PATH: "${PATH}"
+    ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"  # Expands from host environment
+    HOME: "/root"  # Container home directory (not host HOME!)
+    PATH: "/usr/local/bin:/usr/bin:/bin"  # Container PATH (not host PATH!)
 
   container:
     image: "acp-relay-runtime:latest"  # Generic runtime image
