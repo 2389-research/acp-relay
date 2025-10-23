@@ -1,0 +1,26 @@
+# Binaries
+acp-relay
+relay
+main
+
+# Databases
+*.db
+*.db-shm
+*.db-wal
+relay-messages.*
+
+# Git
+.git
+.github
+.gitignore
+
+# Docs
+docs/
+README.md
+
+# Tests
+tests/
+testdata/
+
+# Build artifacts
+.worktrees/
