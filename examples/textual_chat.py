@@ -301,6 +301,7 @@ class ACPChatApp(App):
         self.msg_id = 2
         self.agent_typing_widget = None
         self.current_response = ""
+        self.current_thought = ""  # Track agent's internal thinking
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -697,6 +698,19 @@ class ACPChatApp(App):
                                 self.advance_progress(2.0)  # Advance progress bar slightly with each chunk
                                 handled = True
 
+                        # Handler: Agent thought chunk (internal reasoning - Codex specific)
+                        elif session_update_type == "agent_thought_chunk":
+                            if "content" in update and "text" in update["content"]:
+                                text = update["content"]["text"]
+                                self.current_thought += text
+                                # Update status to show agent is thinking
+                                thought_preview = self.current_thought[:50].replace("\n", " ")
+                                if len(self.current_thought) > 50:
+                                    thought_preview += "..."
+                                self.update_status(f"💭 Thinking: {thought_preview}")
+                                self.advance_progress(1.0)
+                                handled = True
+
                         # Handler: Available commands update
                         elif session_update_type == "available_commands_update":
                             commands = update.get("availableCommands", [])
@@ -785,6 +799,7 @@ class ACPChatApp(App):
 
         # Start agent typing indicator
         self.current_response = ""
+        self.current_thought = ""
         self.start_agent_typing()
 
         # Send prompt to agent
