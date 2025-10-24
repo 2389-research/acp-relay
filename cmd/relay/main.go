@@ -17,9 +17,13 @@ import (
 	mgmtserver "github.com/harper/acp-relay/internal/management"
 	"github.com/harper/acp-relay/internal/session"
 	wsserver "github.com/harper/acp-relay/internal/websocket"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load .env file if it exists (silently ignore if not found)
+	_ = godotenv.Load()
+
 	// Check for subcommands
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
