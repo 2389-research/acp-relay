@@ -60,6 +60,17 @@ func DetectBest() *RuntimeInfo {
 	return nil
 }
 
+// getHome returns HOME with fallback to current directory
+func getHome() string {
+	if home := os.Getenv("HOME"); home != "" {
+		return home
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		return cwd
+	}
+	return "."
+}
+
 func detectDocker() RuntimeInfo {
 	info := RuntimeInfo{Name: "docker"}
 
@@ -110,7 +121,7 @@ func detectColima() RuntimeInfo {
 		info.Status = "running"
 
 		// Find socket
-		home := os.Getenv("HOME")
+		home := getHome()
 		socketPath := filepath.Join(home, ".colima", "default", "docker.sock")
 		if _, err := os.Stat(socketPath); err == nil {
 			info.SocketPath = socketPath
