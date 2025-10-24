@@ -10,10 +10,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/harper/acp-relay/internal/config"
@@ -79,6 +81,75 @@ func NewManager(cfg config.ContainerConfig, agentCommand string, agentArgs []str
 		containers:   make(map[string]*ContainerInfo),
 		db:           database,
 	}, nil
+}
+
+// filterAllowedEnvVars returns only safe host environment variables
+func (m *Manager) filterAllowedEnvVars(env map[string]string) map[string]string {
+	// Allowlist: only safe terminal and locale vars
+	allowlist := []string{"TERM", "COLORTERM"}
+
+	result := make(map[string]string)
+	for k, v := range env {
+		// Check exact match
+		allowed := false
+		for _, prefix := range allowlist {
+			if k == prefix {
+				allowed = true
+				break
+			}
+		}
+
+		// Check LC_* prefix
+		if strings.HasPrefix(k, "LC_") || k == "LANG" {
+			allowed = true
+		}
+
+		if allowed {
+			result[k] = v
+		}
+	}
+
+	return result
+}
+
+// buildContainerLabels creates Docker labels for container tracking
+func (m *Manager) buildContainerLabels(sessionID string) map[string]string {
+	return map[string]string{
+		"managed-by": "acp-relay",
+		"session-id": sessionID,
+		"created-at": time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// sanitizeContainerName produces valid Docker container name
+func (m *Manager) sanitizeContainerName(sessionID string) string {
+	// Docker names: [a-zA-Z0-9][a-zA-Z0-9_.-]*
+	name := strings.ToLower(sessionID)
+	name = strings.ReplaceAll(name, ".", "-")
+	return "acp-relay-" + name
+}
+
+// findExistingContainer checks for existing container by labels
+func (m *Manager) findExistingContainer(ctx context.Context, sessionID string) (string, error) {
+	// Query containers with our labels
+	filters := filters.NewArgs()
+	filters.Add("label", "managed-by=acp-relay")
+	filters.Add("label", fmt.Sprintf("session-id=%s", sessionID))
+
+	containers, err := m.dockerClient.ContainerList(ctx, container.ListOptions{
+		All:     true, // Include stopped containers
+		Filters: filters,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to list containers: %w", err)
+	}
+
+	if len(containers) == 0 {
+		return "", nil // No existing container
+	}
+
+	// Return first match
+	return containers[0].ID, nil
 }
 
 func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir string) (*SessionComponents, error) {
