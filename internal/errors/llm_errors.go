@@ -10,6 +10,13 @@ import (
 	"github.com/harper/acp-relay/internal/jsonrpc"
 )
 
+// JSONRPCError is a structured error type for JSON-RPC responses
+type JSONRPCError struct {
+	Code    int
+	Message string
+	Data    map[string]interface{}
+}
+
 type LLMErrorData struct {
 	ErrorType        string                 `json:"error_type"`
 	Explanation      string                 `json:"explanation"`
