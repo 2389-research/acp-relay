@@ -83,6 +83,17 @@ func NewManager(cfg config.ContainerConfig, agentCommand string, agentArgs []str
 	}, nil
 }
 
+// envContains checks if envVars slice already contains a key
+func envContains(envVars []string, key string) bool {
+	prefix := key + "="
+	for _, env := range envVars {
+		if strings.HasPrefix(env, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // filterAllowedEnvVars returns only safe host environment variables
 func (m *Manager) filterAllowedEnvVars(env map[string]string) map[string]string {
 	// Allowlist: only safe terminal and locale vars
@@ -215,12 +226,10 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 		return nil, fmt.Errorf("failed to create workspace directory: %w", err)
 	}
 
-	// 2. ENHANCEMENT: Filter environment variables through allowlist
-	filteredEnv := m.filterAllowedEnvVars(m.agentEnv)
-
-	// Format environment variables
+	// 2. Build environment variables
+	// Start with user-configured env vars (from config - these are trusted)
 	envVars := []string{}
-	for k, v := range filteredEnv {
+	for k, v := range m.agentEnv {
 		// Expand environment variable references
 		expandedVal := os.ExpandEnv(v)
 		envVars = append(envVars, fmt.Sprintf("%s=%s", k, expandedVal))
@@ -231,6 +240,18 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 			log.Printf("[%s] Make sure %s is set in your environment before starting the relay", sessionID, k)
 		} else {
 			log.Printf("[%s] Setting env: %s=%s (from template: %s)", sessionID, k, expandedVal, v)
+		}
+	}
+
+	// Optionally add safe host environment variables (terminal/locale only)
+	safeHostEnv := m.filterAllowedEnvVars(map[string]string{
+		"TERM":      os.Getenv("TERM"),
+		"COLORTERM": os.Getenv("COLORTERM"),
+		"LANG":      os.Getenv("LANG"),
+	})
+	for k, v := range safeHostEnv {
+		if v != "" && !envContains(envVars, k) { // Don't override user config
+			envVars = append(envVars, fmt.Sprintf("%s=%s", k, v))
 		}
 	}
 

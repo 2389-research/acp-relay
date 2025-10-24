@@ -11,6 +11,49 @@ import (
 	"github.com/harper/acp-relay/internal/config"
 )
 
+func TestEnvContains(t *testing.T) {
+	tests := []struct {
+		name     string
+		envVars  []string
+		key      string
+		expected bool
+	}{
+		{
+			name:     "empty list",
+			envVars:  []string{},
+			key:      "TERM",
+			expected: false,
+		},
+		{
+			name:     "key exists",
+			envVars:  []string{"TERM=xterm", "LANG=en_US"},
+			key:      "TERM",
+			expected: true,
+		},
+		{
+			name:     "key does not exist",
+			envVars:  []string{"TERM=xterm", "LANG=en_US"},
+			key:      "HOME",
+			expected: false,
+		},
+		{
+			name:     "partial key match should not match",
+			envVars:  []string{"ANTHROPIC_API_KEY=sk-123"},
+			key:      "API_KEY",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := envContains(tt.envVars, tt.key)
+			if result != tt.expected {
+				t.Errorf("envContains(%v, %q) = %v, want %v", tt.envVars, tt.key, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestFilterAllowedEnvVars(t *testing.T) {
 	m := &Manager{}
 
