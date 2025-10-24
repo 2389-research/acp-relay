@@ -12,6 +12,20 @@ A Go-based relay server that translates HTTP/WebSocket requests into ACP (Agent 
 - **Concurrent Sessions**: Support for multiple concurrent agent sessions
 - **Clean Shutdown**: Proper cleanup of agent processes on session termination
 
+### Pack'n'Play Improvements
+
+Security and UX enhancements inspired by obra/packnplay:
+
+- **Environment Isolation**: Only safe variables (TERM, LANG, LC_*) passed to containers
+- **Container Reuse**: Existing containers reused when possible, reducing startup time
+- **Runtime Detection**: Auto-detect Docker, Podman, or Colima
+- **Interactive Setup**: `acp-relay setup` guides first-time configuration
+- **XDG Support**: Standard Linux/Unix directory structure (~/.config, ~/.local/share)
+- **Structured Logging**: `--verbose` flag for detailed debug output
+- **Container Labels**: Track managed containers via Docker labels
+
+See [docs/packnplay-improvements.md](docs/packnplay-improvements.md) for details.
+
 ## Architecture
 
 The ACP Relay Server uses a three-layer architecture:
@@ -99,6 +113,20 @@ agent:
   max_concurrent_sessions: 100
 ```
 
+### First-Time Setup
+
+For container mode, run the interactive setup:
+
+```bash
+./acp-relay setup
+```
+
+This will:
+- Detect available container runtimes
+- Guide configuration choices
+- Generate config file at `~/.config/acp-relay/config.yaml`
+- Complete in <5 minutes
+
 ### Running
 
 Start the relay server:
@@ -113,6 +141,12 @@ You should see:
 Starting HTTP server on 0.0.0.0:8080
 Starting WebSocket server on 0.0.0.0:8081
 Starting management API on 127.0.0.1:8082
+```
+
+### Running with Verbose Logging
+
+```bash
+./acp-relay --verbose --config ~/.config/acp-relay/config.yaml
 ```
 
 ### Testing
