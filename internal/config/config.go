@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/harper/acp-relay/internal/xdg"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 )
@@ -79,6 +80,9 @@ func Load(path string) (*Config, error) {
 			cfg.Agent.Env = rawConfig.Agent.Env
 		}
 	}
+
+	// ENHANCEMENT: Expand XDG variables in database path
+	cfg.Database.Path = xdg.ExpandPath(cfg.Database.Path)
 
 	// Default to process mode if not specified
 	if cfg.Agent.Mode == "" {

@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -81,5 +82,85 @@ agent:
 	// Verify values are correct
 	if cfg.Agent.Env["ANTHROPIC_API_KEY"] != "${ANTHROPIC_API_KEY}" {
 		t.Errorf("expected ANTHROPIC_API_KEY value '${ANTHROPIC_API_KEY}', got %q", cfg.Agent.Env["ANTHROPIC_API_KEY"])
+	}
+}
+
+func TestLoad_XDGExpansion(t *testing.T) {
+	// Create temp config with XDG variable
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	configContent := `
+server:
+  http_port: 8080
+  http_host: "0.0.0.0"
+  websocket_port: 8081
+  websocket_host: "0.0.0.0"
+  management_port: 8082
+  management_host: "127.0.0.1"
+
+agent:
+  command: "/bin/echo"
+  mode: "process"
+
+database:
+  path: "$XDG_DATA_HOME/db.sqlite"
+`
+
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// Should NOT contain literal $XDG_DATA_HOME
+	if cfg.Database.Path == "$XDG_DATA_HOME/db.sqlite" {
+		t.Error("XDG variable not expanded in database path")
+	}
+
+	// Should contain actual path
+	home := os.Getenv("HOME")
+	expectedPath := filepath.Join(home, ".local", "share", "acp-relay", "db.sqlite")
+	if cfg.Database.Path != expectedPath {
+		t.Errorf("Database.Path = %q, want %q", cfg.Database.Path, expectedPath)
+	}
+}
+
+func TestLoad_NonXDGPathUnchanged(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	configContent := `
+server:
+  http_port: 8080
+  http_host: "0.0.0.0"
+  websocket_port: 8081
+  websocket_host: "0.0.0.0"
+  management_port: 8082
+  management_host: "127.0.0.1"
+
+agent:
+  command: "/bin/echo"
+  mode: "process"
+
+database:
+  path: "/absolute/path/db.sqlite"
+`
+
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// Should remain unchanged
+	if cfg.Database.Path != "/absolute/path/db.sqlite" {
+		t.Errorf("Non-XDG path was modified: %q", cfg.Database.Path)
 	}
 }
