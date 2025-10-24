@@ -1,0 +1,324 @@
+digraph acp_relay {
+    // Graph attributes for better layout
+    rankdir=TB;
+    compound=true;
+    newrank=true;
+    splines=ortho;
+    nodesep=0.6;
+    ranksep=0.8;
+
+    // Node defaults
+    node [shape=box, style="rounded,filled", fontname="Arial", fontsize=10];
+    edge [fontname="Arial", fontsize=9];
+
+    // Color scheme
+    // #E8F4F8 - Light blue (servers/interfaces)
+    // #FFF4E6 - Light orange (core logic)
+    // #F0F8E8 - Light green (infrastructure)
+    // #F8E8F0 - Light purple (storage)
+    // #FFE8E8 - Light red (errors)
+    // #F0F0F0 - Light gray (external)
+
+    // ========================================
+    // EXTERNAL CLIENTS
+    // ========================================
+    subgraph cluster_clients {
+        label="External Clients";
+        style=dashed;
+        color="#666666";
+        fontsize=12;
+
+        http_client [label="HTTP Client\n(curl, fetch)", fillcolor="#F0F0F0"];
+        ws_client [label="WebSocket Client\n(browser, CLI)", fillcolor="#F0F0F0"];
+        mgmt_client [label="Management Client\n(monitoring)", fillcolor="#F0F0F0"];
+    }
+
+    // ========================================
+    // FRONTEND LAYER (Interface Layer)
+    // ========================================
+    subgraph cluster_frontend {
+        label="Frontend Layer (Servers)";
+        style=filled;
+        fillcolor="#E8F4F8";
+        color="#1A73E8";
+        fontsize=12;
+
+        http_server [label="HTTP Server\n:8080\ninternal/http", fillcolor="#E8F4F8"];
+        ws_server [label="WebSocket Server\n:8081\ninternal/websocket", fillcolor="#E8F4F8"];
+        mgmt_server [label="Management API\n:8082 (localhost)\ninternal/management", fillcolor="#E8F4F8"];
+    }
+
+    // ========================================
+    // TRANSLATION LAYER
+    // ========================================
+    subgraph cluster_translation {
+        label="Translation Layer (Protocol Adapters)";
+        style=filled;
+        fillcolor="#FFF4E6";
+        color="#F57C00";
+        fontsize=12;
+
+        jsonrpc [label="JSON-RPC 2.0\nEncoder/Decoder\ninternal/jsonrpc", fillcolor="#FFF4E6"];
+    }
+
+    // ========================================
+    // BACKEND LAYER (Core Business Logic)
+    // ========================================
+    subgraph cluster_backend {
+        label="Backend Layer (Session Management)";
+        style=filled;
+        fillcolor="#FFF4E6";
+        color="#F57C00";
+        fontsize=12;
+
+        session_mgr [label="Session Manager\ninternal/session\n• Process Lifecycle\n• Stdio Bridging\n• Mode Selection", fillcolor="#FFF4E6"];
+
+        subgraph cluster_modes {
+            label="Execution Modes";
+            style=filled;
+            fillcolor="#FFFFFF";
+
+            process_mode [label="Process Mode\n• Direct subprocess\n• Host environment\n• Simple setup", fillcolor="#FFFFFF"];
+            container_mode [label="Container Mode\n• Docker isolation\n• Environment filtering\n• Container reuse", fillcolor="#FFFFFF"];
+        }
+    }
+
+    // ========================================
+    // CONTAINER INFRASTRUCTURE
+    // ========================================
+    subgraph cluster_container_infra {
+        label="Container Infrastructure";
+        style=filled;
+        fillcolor="#F0F8E8";
+        color="#388E3C";
+        fontsize=12;
+
+        container_mgr [label="Container Manager\ninternal/container\n• Docker client\n• Lifecycle management\n• Stdio attachment", fillcolor="#F0F8E8"];
+
+        subgraph cluster_container_features {
+            label="Pack'n'Play Features";
+            style=filled;
+            fillcolor="#FFFFFF";
+
+            env_filter [label="Env Filtering\n• Allowlist only\n• TERM, LANG, LC_*\n• User config passthrough", fillcolor="#FFFFFF"];
+            container_reuse [label="Container Reuse\n• Label tracking\n• State management\n• Restart handling", fillcolor="#FFFFFF"];
+            container_labels [label="Labels\n• managed-by\n• session-id\n• created-at", fillcolor="#FFFFFF"];
+        }
+    }
+
+    // ========================================
+    // RUNTIME LAYER
+    // ========================================
+    subgraph cluster_runtime {
+        label="Container Runtime Layer";
+        style=filled;
+        fillcolor="#F0F8E8";
+        color="#388E3C";
+        fontsize=12;
+
+        docker [label="Docker\n/var/run/docker.sock", shape=cylinder, fillcolor="#F0F8E8"];
+        colima [label="Colima\n~/.colima/.../docker.sock", shape=cylinder, fillcolor="#F0F8E8"];
+        podman [label="Podman\n/var/run/podman.sock", shape=cylinder, fillcolor="#F0F8E8"];
+
+        runtime_detect [label="Runtime Detection\ninternal/runtime\n• Auto-detect available\n• Socket path discovery\n• Version checking", fillcolor="#F0F8E8"];
+    }
+
+    // ========================================
+    // AGENT LAYER
+    // ========================================
+    subgraph cluster_agents {
+        label="Agent Processes";
+        style=filled;
+        fillcolor="#F0F8E8";
+        color="#388E3C";
+        fontsize=12;
+
+        agent_container [label="Agent Container\n• ACP binary\n• Workspace mount\n• ~/.claude mount (ro)\n• Isolated environment", shape=component, fillcolor="#F0F8E8"];
+        agent_process [label="Agent Process\n• Direct subprocess\n• Host filesystem\n• Full env access", shape=component, fillcolor="#F0F8E8"];
+    }
+
+    // ========================================
+    // SUPPORT LAYER (XDG, Logging, Config)
+    // ========================================
+    subgraph cluster_support {
+        label="Support Infrastructure (Pack'n'Play)";
+        style=filled;
+        fillcolor="#FFF4E6";
+        color="#F57C00";
+        fontsize=12;
+
+        xdg [label="XDG Paths\ninternal/xdg\n• ~/.config/acp-relay\n• ~/.local/share/acp-relay\n• ~/.cache/acp-relay", fillcolor="#FFF4E6"];
+        logger [label="Structured Logger\ninternal/logger\n• DEBUG, INFO, WARN, ERROR\n• --verbose flag control", fillcolor="#FFF4E6"];
+        config [label="Config Loader\ninternal/config\n• YAML parsing\n• XDG expansion\n• Env var templates", fillcolor="#FFF4E6"];
+    }
+
+    // ========================================
+    // SETUP & CLI
+    // ========================================
+    subgraph cluster_cli {
+        label="CLI Interface";
+        style=filled;
+        fillcolor="#E8F4F8";
+        color="#1A73E8";
+        fontsize=12;
+
+        main [label="main()\ncmd/relay/main.go\n• Subcommand routing\n• .env loading\n• Flag parsing", fillcolor="#E8F4F8"];
+        setup [label="Setup Wizard\ncmd/relay/setup.go\n• Runtime detection\n• Interactive Q&A\n• Config generation", fillcolor="#E8F4F8"];
+    }
+
+    // ========================================
+    // STORAGE LAYER
+    // ========================================
+    subgraph cluster_storage {
+        label="Storage Layer";
+        style=filled;
+        fillcolor="#F8E8F0";
+        color="#8E24AA";
+        fontsize=12;
+
+        database [label="SQLite Database\ninternal/db\n• Message logging\n• Session tracking\n• Crash recovery", shape=cylinder, fillcolor="#F8E8F0"];
+        config_file [label="config.yaml\n• Server ports\n• Agent command\n• Container settings", shape=note, fillcolor="#F8E8F0"];
+        env_file [label=".env\n• ANTHROPIC_API_KEY\n• Secrets", shape=note, fillcolor="#F8E8F0"];
+    }
+
+    // ========================================
+    // ERROR HANDLING
+    // ========================================
+    subgraph cluster_errors {
+        label="Error Handling (LLM-Optimized)";
+        style=filled;
+        fillcolor="#FFE8E8";
+        color="#D32F2F";
+        fontsize=12;
+
+        error_types [label="Error Types\ninternal/errors\n• DockerUnavailableError\n• ImageNotFoundError\n• SetupRequiredError\n• XDGPathError\n• RuntimeNotFoundError", fillcolor="#FFE8E8"];
+        error_format [label="Error Format\n• Explanation\n• Possible causes\n• Suggested actions\n• Relevant state\n• Recoverable flag", fillcolor="#FFE8E8"];
+    }
+
+    // ========================================
+    // DATA FLOW: CLIENT TO AGENT
+    // ========================================
+
+    // Client connections
+    http_client -> http_server [label="POST /session/new\nPOST /session/prompt", color="#1A73E8"];
+    ws_client -> ws_server [label="WebSocket\nBidirectional", color="#1A73E8"];
+    mgmt_client -> mgmt_server [label="GET /health\nGET /config", color="#1A73E8"];
+
+    // Server to translation
+    http_server -> jsonrpc [label="HTTP → JSON-RPC", color="#F57C00"];
+    ws_server -> jsonrpc [label="WebSocket → JSON-RPC", color="#F57C00"];
+
+    // Translation to session manager
+    jsonrpc -> session_mgr [label="session/new\nsession/prompt\ninitialize", color="#F57C00"];
+
+    // Session manager to modes
+    session_mgr -> process_mode [label="mode=process", color="#F57C00", style=dashed];
+    session_mgr -> container_mode [label="mode=container", color="#F57C00"];
+
+    // Container mode to container manager
+    container_mode -> container_mgr [label="CreateSession()\nStopContainer()", color="#388E3C"];
+
+    // Container manager features
+    container_mgr -> env_filter [label="filter env vars", color="#388E3C", style=dotted];
+    container_mgr -> container_reuse [label="check existing", color="#388E3C", style=dotted];
+    container_mgr -> container_labels [label="add labels", color="#388E3C", style=dotted];
+
+    // Container manager to runtime
+    container_mgr -> docker [label="Docker API", color="#388E3C"];
+    container_mgr -> colima [label="Docker API", color="#388E3C"];
+    container_mgr -> podman [label="Podman API", color="#388E3C", style=dashed];
+
+    // Runtime to agents
+    docker -> agent_container [label="spawn\nattach stdio", color="#388E3C"];
+    colima -> agent_container [label="spawn\nattach stdio", color="#388E3C"];
+    podman -> agent_container [label="spawn\nattach stdio", color="#388E3C", style=dashed];
+
+    process_mode -> agent_process [label="fork/exec", color="#F57C00", style=dashed];
+
+    // Agent responses (reverse flow)
+    agent_container -> container_mgr [label="stdout/stderr\nJSON-RPC responses", color="#388E3C", dir=back];
+    agent_process -> session_mgr [label="stdout/stderr\nJSON-RPC responses", color="#F57C00", dir=back, style=dashed];
+
+    // ========================================
+    // SETUP FLOW
+    // ========================================
+
+    main -> setup [label="acp-relay setup", color="#1A73E8"];
+    setup -> runtime_detect [label="detect runtimes", color="#388E3C"];
+    runtime_detect -> docker [label="check", color="#388E3C", style=dotted];
+    runtime_detect -> colima [label="check", color="#388E3C", style=dotted];
+    runtime_detect -> podman [label="check", color="#388E3C", style=dotted];
+    setup -> config_file [label="generate config", color="#8E24AA"];
+    setup -> xdg [label="create dirs", color="#F57C00"];
+
+    // ========================================
+    // CONFIGURATION FLOW
+    // ========================================
+
+    main -> env_file [label="load .env\n(godotenv)", color="#8E24AA"];
+    main -> config [label="load config", color="#F57C00"];
+    config -> config_file [label="read YAML", color="#8E24AA"];
+    config -> xdg [label="expand $XDG_*", color="#F57C00"];
+    config -> session_mgr [label="agent config\nserver config", color="#F57C00"];
+
+    // ========================================
+    // LOGGING FLOW
+    // ========================================
+
+    session_mgr -> logger [label="lifecycle events", color="#F57C00", style=dotted];
+    container_mgr -> logger [label="container ops", color="#388E3C", style=dotted];
+    http_server -> logger [label="requests", color="#1A73E8", style=dotted];
+    ws_server -> logger [label="connections", color="#1A73E8", style=dotted];
+
+    // ========================================
+    // DATABASE FLOW
+    // ========================================
+
+    session_mgr -> database [label="log messages\ntrack sessions\ncrash recovery", color="#8E24AA"];
+
+    // ========================================
+    // ERROR FLOW
+    // ========================================
+
+    container_mgr -> error_types [label="raise errors", color="#D32F2F", style=dashed];
+    runtime_detect -> error_types [label="raise errors", color="#D32F2F", style=dashed];
+    session_mgr -> error_types [label="raise errors", color="#D32F2F", style=dashed];
+    error_types -> error_format [label="format for LLM", color="#D32F2F"];
+    error_format -> jsonrpc [label="JSON-RPC error", color="#D32F2F"];
+
+    // ========================================
+    // LEGEND
+    // ========================================
+
+    subgraph cluster_legend {
+        label="Legend";
+        style=filled;
+        fillcolor="#FFFFFF";
+        color="#666666";
+        fontsize=10;
+        rankdir=LR;
+
+        legend_interface [label="Interface Layer", fillcolor="#E8F4F8"];
+        legend_core [label="Core Logic", fillcolor="#FFF4E6"];
+        legend_infra [label="Infrastructure", fillcolor="#F0F8E8"];
+        legend_storage [label="Storage", fillcolor="#F8E8F0"];
+        legend_error [label="Error Handling", fillcolor="#FFE8E8"];
+        legend_external [label="External", fillcolor="#F0F0F0"];
+
+        legend_interface -> legend_core [style=invis];
+        legend_core -> legend_infra [style=invis];
+        legend_infra -> legend_storage [style=invis];
+        legend_storage -> legend_error [style=invis];
+        legend_error -> legend_external [style=invis];
+    }
+
+    // ========================================
+    // NOTES
+    // ========================================
+
+    note1 [shape=note, label="Data Flow:\n1. Client → Server\n2. Server → JSON-RPC\n3. JSON-RPC → Session Mgr\n4. Session Mgr → Container/Process\n5. Agent ← Container/Process\n6. Response flows backward", fillcolor="#FFFFCC", style="filled"];
+
+    note2 [shape=note, label="Pack'n'Play Features:\n• Environment isolation\n• Container reuse\n• Runtime auto-detect\n• Interactive setup\n• XDG compliance\n• Structured logging", fillcolor="#FFFFCC", style="filled"];
+
+    note3 [shape=note, label="Security Model:\n• Env var allowlisting\n• Container labels\n• Read-only mounts\n• User config passthrough\n• No host env leakage", fillcolor="#FFFFCC", style="filled"];
+}

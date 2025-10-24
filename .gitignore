@@ -21,3 +21,7 @@ output.txt
 # Worktrees
 .worktrees/
 .env
+
+# Generated architecture diagrams
+docs/architecture.png
+docs/architecture.svg
