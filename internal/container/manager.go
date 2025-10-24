@@ -153,15 +153,72 @@ func (m *Manager) findExistingContainer(ctx context.Context, sessionID string) (
 }
 
 func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir string) (*SessionComponents, error) {
+	// ENHANCEMENT: Check for existing container first
+	existingID, err := m.findExistingContainer(ctx, sessionID)
+	if err != nil {
+		log.Printf("[%s] Error checking for existing container: %v", sessionID, err)
+	}
+
+	if existingID != "" {
+		// Container exists, check if running
+		inspect, err := m.dockerClient.ContainerInspect(ctx, existingID)
+		if err == nil && inspect.State.Running {
+			log.Printf("[%s] Reusing existing running container: %s", sessionID, existingID)
+
+			// Attach to existing container
+			attachResp, err := m.dockerClient.ContainerAttach(ctx, existingID, container.AttachOptions{
+				Stream: true,
+				Stdin:  true,
+				Stdout: true,
+				Stderr: true,
+			})
+			if err != nil {
+				return nil, NewAttachFailedError(err)
+			}
+
+			// Demux stdout/stderr
+			stdoutReader, stderrReader := demuxStreams(attachResp.Reader)
+
+			// CRITICAL: Update manager state (fixes Error #1)
+			m.mu.Lock()
+			m.containers[sessionID] = &ContainerInfo{
+				ContainerID: existingID,
+				SessionID:   sessionID,
+			}
+			m.mu.Unlock()
+
+			// CRITICAL: Start monitor (fixes Error #1)
+			go m.monitorContainer(ctx, existingID, sessionID)
+
+			return &SessionComponents{
+				ContainerID: existingID,
+				Stdin:       attachResp.Conn,
+				Stdout:      stdoutReader,
+				Stderr:      stderrReader,
+			}, nil
+		}
+
+		// Container exists but stopped - remove it
+		if err == nil {
+			log.Printf("[%s] Removing stopped container: %s", sessionID, existingID)
+			m.dockerClient.ContainerRemove(ctx, existingID, container.RemoveOptions{Force: true})
+		}
+	}
+
+	// No reusable container, create new one
+
 	// 1. Create host workspace directory
 	hostWorkspace := filepath.Join(m.config.WorkspaceHostBase, sessionID)
 	if err := os.MkdirAll(hostWorkspace, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create workspace directory: %w", err)
 	}
 
-	// 2. Format environment variables
+	// 2. ENHANCEMENT: Filter environment variables through allowlist
+	filteredEnv := m.filterAllowedEnvVars(m.agentEnv)
+
+	// Format environment variables
 	envVars := []string{}
-	for k, v := range m.agentEnv {
+	for k, v := range filteredEnv {
 		// Expand environment variable references
 		expandedVal := os.ExpandEnv(v)
 		envVars = append(envVars, fmt.Sprintf("%s=%s", k, expandedVal))
@@ -181,11 +238,13 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 
 	containerConfig := &container.Config{
 		Image:     m.config.Image,
-		Cmd:       cmd, // Runtime command override (not baked into image)
+		Cmd:       cmd,
 		Env:       envVars,
-		Tty:       false, // CRITICAL: must be false for stream demuxing
+		Tty:       false,
 		OpenStdin: true,
 		StdinOnce: false,
+		// ENHANCEMENT: Add container labels
+		Labels:    m.buildContainerLabels(sessionID),
 	}
 
 	// 4. Parse memory limit
@@ -218,14 +277,14 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 		},
 	}
 
-	// 6. Create container
+	// 6. ENHANCEMENT: Create container with sanitized name
 	resp, err := m.dockerClient.ContainerCreate(
 		ctx,
 		containerConfig,
 		hostConfig,
 		nil,
 		nil,
-		sessionID,
+		m.sanitizeContainerName(sessionID),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create container: %w", err)

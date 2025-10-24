@@ -7,6 +7,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/harper/acp-relay/internal/config"
 )
 
@@ -119,4 +120,69 @@ func TestFindExistingContainer_NotFound(t *testing.T) {
 	if err != nil {
 		t.Errorf("findExistingContainer() returned error: %v", err)
 	}
+}
+
+func TestContainerReuse_FullFlow(t *testing.T) {
+	// Regression test for Error #1 (state management bug)
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	cfg := config.ContainerConfig{
+		Image:                  "alpine:latest",
+		DockerHost:             "unix:///var/run/docker.sock",
+		NetworkMode:            "bridge",
+		MemoryLimit:            "512m",
+		CPULimit:               1.0,
+		WorkspaceHostBase:      t.TempDir(),
+		WorkspaceContainerPath: "/workspace",
+		AutoRemove:             false, // Keep container for reuse test
+	}
+
+	m, err := NewManager(cfg, "/bin/sh", []string{"-c", "sleep 30"}, map[string]string{}, nil)
+	if err != nil {
+		t.Skip("Docker not available:", err)
+	}
+
+	ctx := context.Background()
+	sessionID := "reuse-test-session"
+
+	// Create first session
+	components1, err := m.CreateSession(ctx, sessionID, "/workspace")
+	if err != nil {
+		t.Fatalf("First CreateSession failed: %v", err)
+	}
+	containerID1 := components1.ContainerID
+
+	// Verify container in manager's map
+	m.mu.RLock()
+	_, exists := m.containers[sessionID]
+	m.mu.RUnlock()
+	if !exists {
+		t.Fatal("Container not in manager's map after creation")
+	}
+
+	// Create second session with same ID (should reuse)
+	components2, err := m.CreateSession(ctx, sessionID, "/workspace")
+	if err != nil {
+		t.Fatalf("Second CreateSession failed: %v", err)
+	}
+	containerID2 := components2.ContainerID
+
+	// Should be same container
+	if containerID1 != containerID2 {
+		t.Errorf("Container not reused: first=%s, second=%s", containerID1, containerID2)
+	}
+
+	// Verify still in manager's map (regression test for Error #1)
+	m.mu.RLock()
+	_, exists = m.containers[sessionID]
+	m.mu.RUnlock()
+	if !exists {
+		t.Error("Container disappeared from manager's map after reuse (Error #1 regression)")
+	}
+
+	// Cleanup
+	m.StopContainer(sessionID)
+	m.dockerClient.ContainerRemove(ctx, containerID1, container.RemoveOptions{Force: true})
 }
