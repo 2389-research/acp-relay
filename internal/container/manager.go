@@ -244,11 +244,16 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 	}
 
 	// Optionally add safe host environment variables (terminal/locale only)
-	safeHostEnv := m.filterAllowedEnvVars(map[string]string{
-		"TERM":      os.Getenv("TERM"),
-		"COLORTERM": os.Getenv("COLORTERM"),
-		"LANG":      os.Getenv("LANG"),
-	})
+	// Collect all environment variables from the host
+	hostEnvMap := make(map[string]string)
+	for _, env := range os.Environ() {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) == 2 {
+			hostEnvMap[parts[0]] = parts[1]
+		}
+	}
+	// Filter through allowlist (only TERM, COLORTERM, LANG, LC_* pass)
+	safeHostEnv := m.filterAllowedEnvVars(hostEnvMap)
 	for k, v := range safeHostEnv {
 		if v != "" && !envContains(envVars, k) { // Don't override user config
 			envVars = append(envVars, fmt.Sprintf("%s=%s", k, v))
