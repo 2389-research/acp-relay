@@ -201,7 +201,9 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 		// Container exists but stopped - remove it
 		if err == nil {
 			log.Printf("[%s] Removing stopped container: %s", sessionID, existingID)
-			m.dockerClient.ContainerRemove(ctx, existingID, container.RemoveOptions{Force: true})
+			if err := m.dockerClient.ContainerRemove(ctx, existingID, container.RemoveOptions{Force: true}); err != nil {
+				log.Printf("[%s] Warning: failed to remove stopped container: %v", sessionID, err)
+			}
 		}
 	}
 
@@ -259,7 +261,16 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 	}
 
 	// Mount user's ~/.claude directory as read-only for agent configuration
-	claudeDir := filepath.Join(os.Getenv("HOME"), ".claude")
+	home := os.Getenv("HOME")
+	if home == "" {
+		// Fallback to current directory if HOME not set
+		if cwd, err := os.Getwd(); err == nil {
+			home = cwd
+		} else {
+			home = "."
+		}
+	}
+	claudeDir := filepath.Join(home, ".claude")
 	if _, err := os.Stat(claudeDir); err == nil {
 		binds = append(binds, fmt.Sprintf("%s:/home/.claude:ro", claudeDir))
 		log.Printf("[%s] Mounting ~/.claude directory as read-only", sessionID)

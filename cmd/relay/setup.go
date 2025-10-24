@@ -66,7 +66,11 @@ func runSetup() {
 		}
 		fmt.Print("\nSelection [1]: ")
 
-		input, _ := reader.ReadString('\n')
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Printf("Error reading input: %v\n", err)
+			os.Exit(1)
+		}
 		input = strings.TrimSpace(input)
 
 		if input == "" || input == "1" {
@@ -91,7 +95,11 @@ func runSetup() {
 
 	dataPath := xdg.DataHome()
 	fmt.Printf("Data directory [%s]: ", dataPath)
-	input, _ := reader.ReadString('\n')
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("Error reading input: %v\n", err)
+		os.Exit(1)
+	}
 	input = strings.TrimSpace(input)
 	if input != "" {
 		dataPath = input
@@ -101,7 +109,11 @@ func runSetup() {
 
 	configPath := filepath.Join(xdg.ConfigHome(), "config.yaml")
 	fmt.Printf("Config file [%s]: ", configPath)
-	input, _ = reader.ReadString('\n')
+	input, err = reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("Error reading input: %v\n", err)
+		os.Exit(1)
+	}
 	input = strings.TrimSpace(input)
 	if input != "" {
 		configPath = input
@@ -111,7 +123,11 @@ func runSetup() {
 
 	// Step 4: Verbosity Preference
 	fmt.Print("Enable verbose logging? [y/N]: ")
-	input, _ = reader.ReadString('\n')
+	input, err = reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("Error reading input: %v\n", err)
+		os.Exit(1)
+	}
 	input = strings.TrimSpace(strings.ToLower(input))
 	verboseLogging := input == "y" || input == "yes"
 	if verboseLogging {
