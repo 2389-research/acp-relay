@@ -139,19 +139,35 @@ func TestBroadcastToClients(t *testing.T) {
 	}
 	cm := NewConnectionManager(sess)
 
-	// Attach two clients
-	client1ID := cm.AttachClient(nil)
-	client2ID := cm.AttachClient(nil)
+	// Create client connections directly WITHOUT starting delivery goroutines
+	// This avoids the race condition where delivery goroutines clear buffers
+	client1 := &ClientConnection{
+		id:           "client1",
+		conn:         nil,
+		buffer:       make([][]byte, 0, 100),
+		deliveryChan: make(chan struct{}, 1),
+	}
+
+	client2 := &ClientConnection{
+		id:           "client2",
+		conn:         nil,
+		buffer:       make([][]byte, 0, 100),
+		deliveryChan: make(chan struct{}, 1),
+	}
+
+	// Add clients to connection manager manually
+	cm.mu.Lock()
+	cm.connections["client1"] = client1
+	cm.connections["client2"] = client2
+	cm.mu.Unlock()
 
 	// Broadcast a message
 	testMsg := []byte("test message")
 	cm.broadcastToClients(testMsg)
 
+	// Verify buffers contain the message
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
-
-	client1 := cm.connections[client1ID]
-	client2 := cm.connections[client2ID]
 
 	if len(client1.buffer) != 1 {
 		t.Errorf("Client1 expected 1 buffered message, got %d", len(client1.buffer))
