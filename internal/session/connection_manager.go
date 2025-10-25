@@ -4,9 +4,11 @@
 package session
 
 import (
+	"log"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -29,4 +31,26 @@ func NewConnectionManager(sess *Session) *ConnectionManager {
 		connections: make(map[string]*ClientConnection),
 		session:     sess,
 	}
+}
+
+func (cm *ConnectionManager) AttachClient(conn *websocket.Conn) string {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	clientID := uuid.New().String()[:8]
+
+	client := &ClientConnection{
+		id:           clientID,
+		conn:         conn,
+		buffer:       make([][]byte, 0, 100),
+		deliveryChan: make(chan struct{}, 1),
+		attached:     time.Now(),
+	}
+
+	cm.connections[clientID] = client
+
+	log.Printf("[%s] Client %s attached (%d total clients)",
+		cm.session.ID[:8], clientID, len(cm.connections))
+
+	return clientID
 }

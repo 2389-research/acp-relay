@@ -2,6 +2,8 @@ package session
 
 import (
 	"testing"
+
+	"github.com/gorilla/websocket"
 )
 
 func TestNewConnectionManager(t *testing.T) {
@@ -26,5 +28,63 @@ func TestNewConnectionManager(t *testing.T) {
 
 	if len(cm.connections) != 0 {
 		t.Errorf("Expected 0 connections, got %d", len(cm.connections))
+	}
+}
+
+func TestAttachClient(t *testing.T) {
+	sess := &Session{ID: "sess_test123"}
+	cm := NewConnectionManager(sess)
+
+	// Create mock WebSocket connection (nil is ok for this test)
+	var mockConn *websocket.Conn
+
+	clientID := cm.AttachClient(mockConn)
+
+	if clientID == "" {
+		t.Error("AttachClient returned empty clientID")
+	}
+
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	if len(cm.connections) != 1 {
+		t.Errorf("Expected 1 connection, got %d", len(cm.connections))
+	}
+
+	client, exists := cm.connections[clientID]
+	if !exists {
+		t.Error("Client not found in connections map")
+	}
+
+	if client.id != clientID {
+		t.Errorf("Client ID mismatch: %s != %s", client.id, clientID)
+	}
+
+	if client.buffer == nil {
+		t.Error("Client buffer not initialized")
+	}
+
+	if client.deliveryChan == nil {
+		t.Error("Client deliveryChan not initialized")
+	}
+}
+
+func TestAttachMultipleClients(t *testing.T) {
+	sess := &Session{ID: "sess_test123"}
+	cm := NewConnectionManager(sess)
+
+	clientID1 := cm.AttachClient(nil)
+	clientID2 := cm.AttachClient(nil)
+	clientID3 := cm.AttachClient(nil)
+
+	if clientID1 == clientID2 || clientID2 == clientID3 || clientID1 == clientID3 {
+		t.Error("Client IDs are not unique")
+	}
+
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	if len(cm.connections) != 3 {
+		t.Errorf("Expected 3 connections, got %d", len(cm.connections))
 	}
 }
