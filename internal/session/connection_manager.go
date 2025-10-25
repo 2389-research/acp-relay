@@ -80,10 +80,19 @@ func (cm *ConnectionManager) DetachClient(clientID string) {
 
 func (cm *ConnectionManager) StartBroadcaster() {
 	go func() {
-		for msg := range cm.session.FromAgent {
-			cm.broadcastToClients(msg)
+		for {
+			select {
+			case msg, ok := <-cm.session.FromAgent:
+				if !ok {
+					log.Printf("[%s] Broadcaster stopped (FromAgent closed)", cm.session.ID[:8])
+					return
+				}
+				cm.broadcastToClients(msg)
+			case <-cm.session.Context.Done():
+				log.Printf("[%s] Broadcaster stopped (context canceled)", cm.session.ID[:8])
+				return
+			}
 		}
-		log.Printf("[%s] Broadcaster stopped (FromAgent closed)", cm.session.ID[:8])
 	}()
 }
 
