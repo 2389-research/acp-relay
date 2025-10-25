@@ -54,3 +54,23 @@ func (cm *ConnectionManager) AttachClient(conn *websocket.Conn) string {
 
 	return clientID
 }
+
+func (cm *ConnectionManager) DetachClient(clientID string) {
+	cm.mu.Lock()
+	client, exists := cm.connections[clientID]
+	if !exists {
+		cm.mu.Unlock()
+		return
+	}
+
+	delete(cm.connections, clientID)
+	bufferedCount := len(client.buffer)
+	remainingClients := len(cm.connections)
+	cm.mu.Unlock()
+
+	// Close delivery channel to stop delivery goroutine
+	close(client.deliveryChan)
+
+	log.Printf("[%s] Client %s detached, dropped %d buffered messages (%d clients remain)",
+		cm.session.ID[:8], clientID, bufferedCount, remainingClients)
+}

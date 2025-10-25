@@ -88,3 +88,46 @@ func TestAttachMultipleClients(t *testing.T) {
 		t.Errorf("Expected 3 connections, got %d", len(cm.connections))
 	}
 }
+
+func TestDetachClient(t *testing.T) {
+	sess := &Session{ID: "sess_test123"}
+	cm := NewConnectionManager(sess)
+
+	clientID := cm.AttachClient(nil)
+
+	cm.mu.RLock()
+	initialCount := len(cm.connections)
+	cm.mu.RUnlock()
+
+	if initialCount != 1 {
+		t.Fatalf("Expected 1 connection before detach, got %d", initialCount)
+	}
+
+	cm.DetachClient(clientID)
+
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	if len(cm.connections) != 0 {
+		t.Errorf("Expected 0 connections after detach, got %d", len(cm.connections))
+	}
+
+	if _, exists := cm.connections[clientID]; exists {
+		t.Error("Client still exists in connections map after detach")
+	}
+}
+
+func TestDetachNonexistentClient(t *testing.T) {
+	sess := &Session{ID: "sess_test123"}
+	cm := NewConnectionManager(sess)
+
+	// Should not panic when detaching nonexistent client
+	cm.DetachClient("nonexistent")
+
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	if len(cm.connections) != 0 {
+		t.Errorf("Expected 0 connections, got %d", len(cm.connections))
+	}
+}
