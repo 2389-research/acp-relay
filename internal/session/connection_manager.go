@@ -49,6 +49,9 @@ func (cm *ConnectionManager) AttachClient(conn *websocket.Conn) string {
 
 	cm.connections[clientID] = client
 
+	// Start delivery goroutine
+	cm.startClientDelivery(client)
+
 	log.Printf("[%s] Client %s attached (%d total clients)",
 		cm.session.ID[:8], clientID, len(cm.connections))
 
@@ -73,4 +76,70 @@ func (cm *ConnectionManager) DetachClient(clientID string) {
 
 	log.Printf("[%s] Client %s detached, dropped %d buffered messages (%d clients remain)",
 		cm.session.ID[:8], clientID, bufferedCount, remainingClients)
+}
+
+func (cm *ConnectionManager) StartBroadcaster() {
+	go func() {
+		for msg := range cm.session.FromAgent {
+			cm.broadcastToClients(msg)
+		}
+		log.Printf("[%s] Broadcaster stopped (FromAgent closed)", cm.session.ID[:8])
+	}()
+}
+
+func (cm *ConnectionManager) broadcastToClients(msg []byte) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	for clientID, client := range cm.connections {
+		// Append to unlimited buffer
+		client.buffer = append(client.buffer, msg)
+
+		// Signal delivery goroutine (non-blocking)
+		select {
+		case client.deliveryChan <- struct{}{}:
+			// Successfully signaled
+		default:
+			// Already has pending signal, skip
+		}
+
+		// Warn if buffer growing large
+		if len(client.buffer) > 10000 {
+			log.Printf("[WARN] Client %s buffer at %d messages (slow client?)",
+				clientID, len(client.buffer))
+		}
+	}
+}
+
+func (cm *ConnectionManager) startClientDelivery(client *ClientConnection) {
+	go func() {
+		for range client.deliveryChan {
+			cm.deliverPendingMessages(client)
+		}
+	}()
+}
+
+func (cm *ConnectionManager) deliverPendingMessages(client *ClientConnection) {
+	cm.mu.Lock()
+	pending := client.buffer
+	client.buffer = nil
+	cm.mu.Unlock()
+
+	for i, msg := range pending {
+		if client.conn == nil {
+			// Mock connection, skip actual write
+			continue
+		}
+
+		if err := client.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+			// Client write failed - drop remaining messages
+			dropped := len(pending) - i
+			log.Printf("[%s] Client %s write failed, dropping %d messages: %v",
+				cm.session.ID[:8], client.id, dropped, err)
+
+			// Auto-detach dead client
+			cm.DetachClient(client.id)
+			return
+		}
+	}
 }
