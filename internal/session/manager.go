@@ -69,7 +69,9 @@ func (m *Manager) createProcessSession(ctx context.Context, sessionID, workingDi
 	// Set up environment - inherit parent env and add custom vars
 	cmd.Env = append(os.Environ(), "PWD="+workingDir)
 	for k, v := range m.config.AgentEnv {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+		// Expand environment variables in the value (e.g., "${PATH}" -> actual PATH)
+		expandedValue := os.ExpandEnv(v)
+		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, expandedValue))
 	}
 
 	// Create pipes
@@ -176,6 +178,10 @@ func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Sessio
 	m.mu.Lock()
 	m.sessions[sessionID] = sess
 	m.mu.Unlock()
+
+	// Initialize connection manager
+	sess.connMgr = NewConnectionManager(sess)
+	sess.connMgr.StartBroadcaster()
 
 	// Start stdio bridge (works for both modes)
 	go sess.StartStdioBridge()

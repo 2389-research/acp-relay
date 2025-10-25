@@ -36,6 +36,9 @@ type Session struct {
 	// For HTTP: buffer messages from agent
 	MessageBuffer [][]byte
 	BufferMutex   sync.Mutex
+
+	// NEW: Connection manager for multi-client support
+	connMgr *ConnectionManager
 }
 
 // StartStdioBridge starts goroutines to bridge channels and stdio
