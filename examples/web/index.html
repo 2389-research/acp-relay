@@ -268,6 +268,11 @@
             flex-direction: row;
             height: 100vh;
         }
+
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
     </style>
 </head>
 <body>
@@ -319,6 +324,8 @@
         let ws = null;
         let sessionId = null;
         let messageIdCounter = 1;
+        let currentAgentMessage = '';
+        let agentTypingElement = null;
 
         // Connect to WebSocket
         function connect() {
@@ -388,7 +395,6 @@
                 id: messageIdCounter++
             };
 
-            addMessage('request', 'session/new', request);
             ws.send(JSON.stringify(request));
         }
 
@@ -406,6 +412,13 @@
 
             if (!text) return;
 
+            // Add user message to chat
+            addUserMessage(text);
+
+            // Reset agent message tracking
+            currentAgentMessage = '';
+
+            // Send request to agent
             const request = {
                 jsonrpc: "2.0",
                 method: "session/prompt",
@@ -419,15 +432,15 @@
                 id: messageIdCounter++
             };
 
-            addMessage('request', 'session/prompt', request);
             ws.send(JSON.stringify(request));
             input.value = '';
         }
 
         // Handle incoming message
         function handleMessage(msg) {
+            // Handle errors
             if (msg.error) {
-                addMessage('error', 'Error', msg);
+                addErrorMessage(msg.error.message || 'Unknown error');
                 return;
             }
 
@@ -436,42 +449,227 @@
                 sessionId = msg.result.sessionId;
                 document.getElementById('sessionId').textContent = sessionId;
                 enableInput();
-                const isResume = msg.id > 1; // ID 1 is session/new or resume attempt, >1 is likely resume
-                addMessage('response', isResume ? 'session/resume' : 'session/new', msg);
-                refreshSessions(); // Refresh sessions list to highlight active session
+                const isResume = msg.id > 1;
+                addSystemMessage(isResume ? '✨ Session resumed' : '✅ Session created', 'response');
+                refreshSessions();
                 return;
             }
 
-            // Notification (no id)
-            if (msg.method && !msg.id) {
-                addMessage('notification', msg.method, msg);
+            // Handle session/update notifications
+            if (msg.method === 'session/update' && !msg.id) {
+                if (msg.params && msg.params.update) {
+                    handleSessionUpdate(msg.params.update);
+                }
                 return;
             }
 
-            // Response with result
-            if (msg.result) {
-                addMessage('response', 'Response', msg);
+            // Handle permission requests
+            if (msg.method === 'session/request_permission') {
+                handlePermissionRequest(msg);
                 return;
             }
 
-            // Unknown message type
-            addMessage('notification', 'Unknown', msg);
+            // Response to prompt (turn complete)
+            if (msg.id && msg.id >= 2 && msg.result) {
+                finalizeAgentMessage();
+                return;
+            }
+
+            // Unknown message - log it
+            console.log('Unhandled message:', msg);
         }
 
-        // Add message to UI
-        function addMessage(type, label, data) {
+        // Handle session updates
+        function handleSessionUpdate(update) {
+            const updateType = update.sessionUpdate;
+
+            if (updateType === 'agent_message_chunk') {
+                // Streaming agent response
+                if (update.content && update.content.text) {
+                    currentAgentMessage += update.content.text;
+                    updateAgentTyping(currentAgentMessage);
+                }
+            } else if (updateType === 'tool_use') {
+                // Tool being used
+                const toolName = update.tool?.name || 'unknown';
+                addToolUseMessage(toolName);
+            } else if (updateType === 'agent_thinking') {
+                // Agent is thinking
+                addSystemMessage('💭 Agent is thinking...', 'notification');
+            } else if (updateType === 'available_commands_update') {
+                // Commands updated
+                const commands = update.availableCommands || [];
+                addCommandsUpdate(commands);
+            }
+        }
+
+        // Handle permission request
+        function handlePermissionRequest(msg) {
+            const params = msg.params || {};
+            const toolCall = params.toolCall || {};
+            const toolId = toolCall.toolCallId || 'unknown';
+
+            addPermissionRequest(toolId);
+
+            // Auto-approve for now
+            const response = {
+                jsonrpc: "2.0",
+                id: msg.id,
+                result: {
+                    outcome: {
+                        outcome: "selected",
+                        optionId: "allow"
+                    }
+                }
+            };
+            ws.send(JSON.stringify(response));
+            addPermissionResponse(toolId, true);
+        }
+
+        // Add user message
+        function addUserMessage(text) {
             const container = document.getElementById('messagesContainer');
             const msg = document.createElement('div');
-            msg.className = `message ${type}`;
+            msg.className = 'message request';
 
             const time = new Date().toLocaleTimeString();
+            msg.innerHTML = `
+                <div class="message-header">
+                    <span class="message-type">👤 You</span>
+                    <span class="message-time">${time}</span>
+                </div>
+                <div class="message-content">${escapeHtml(text)}</div>
+            `;
+
+            container.appendChild(msg);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Show agent typing with streaming text
+        function updateAgentTyping(text) {
+            const container = document.getElementById('messagesContainer');
+
+            if (!agentTypingElement) {
+                agentTypingElement = document.createElement('div');
+                agentTypingElement.className = 'message response';
+                agentTypingElement.id = 'agent-typing';
+                container.appendChild(agentTypingElement);
+            }
+
+            const time = new Date().toLocaleTimeString();
+            agentTypingElement.innerHTML = `
+                <div class="message-header">
+                    <span class="message-type">🤖 Agent</span>
+                    <span class="message-time">${time}</span>
+                </div>
+                <div class="message-content">${escapeHtml(text)} <span style="animation: blink 1s infinite;">▊</span></div>
+            `;
+
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Finalize agent message (remove typing indicator)
+        function finalizeAgentMessage() {
+            if (agentTypingElement && currentAgentMessage) {
+                const time = new Date().toLocaleTimeString();
+                agentTypingElement.innerHTML = `
+                    <div class="message-header">
+                        <span class="message-type">🤖 Agent</span>
+                        <span class="message-time">${time}</span>
+                    </div>
+                    <div class="message-content">${escapeHtml(currentAgentMessage)}</div>
+                `;
+                agentTypingElement.id = '';
+                agentTypingElement = null;
+                currentAgentMessage = '';
+            }
+        }
+
+        // Add tool use message
+        function addToolUseMessage(toolName) {
+            const container = document.getElementById('messagesContainer');
+            const msg = document.createElement('div');
+            msg.className = 'message notification';
+
+            const time = new Date().toLocaleTimeString();
+            msg.innerHTML = `
+                <div class="message-header">
+                    <span class="message-type">🔧 Tool</span>
+                    <span class="message-time">${time}</span>
+                </div>
+                <div class="message-content">Using: <strong>${escapeHtml(toolName)}</strong></div>
+            `;
+
+            container.appendChild(msg);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Add permission request
+        function addPermissionRequest(toolId) {
+            const container = document.getElementById('messagesContainer');
+            const msg = document.createElement('div');
+            msg.className = 'message notification';
+
+            const time = new Date().toLocaleTimeString();
+            msg.innerHTML = `
+                <div class="message-header">
+                    <span class="message-type">🔐 Permission</span>
+                    <span class="message-time">${time}</span>
+                </div>
+                <div class="message-content">Request: <strong>${escapeHtml(toolId)}</strong></div>
+            `;
+
+            container.appendChild(msg);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Add permission response
+        function addPermissionResponse(toolId, allowed) {
+            const container = document.getElementById('messagesContainer');
+            const msg = document.createElement('div');
+            msg.className = 'message ' + (allowed ? 'response' : 'error');
+
+            const time = new Date().toLocaleTimeString();
+            const icon = allowed ? '✅' : '❌';
+            const status = allowed ? 'Allowed' : 'Denied';
+            msg.innerHTML = `
+                <div class="message-header">
+                    <span class="message-type">${icon} Permission</span>
+                    <span class="message-time">${time}</span>
+                </div>
+                <div class="message-content">${status}: <strong>${escapeHtml(toolId)}</strong></div>
+            `;
+
+            container.appendChild(msg);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Add commands update
+        function addCommandsUpdate(commands) {
+            const container = document.getElementById('messagesContainer');
+            const msg = document.createElement('div');
+            msg.className = 'message notification';
+
+            const time = new Date().toLocaleTimeString();
+            let commandsList = '';
+            if (commands.length > 0 && commands.length <= 5) {
+                commandsList = '<ul style="margin: 0.5rem 0; padding-left: 1.5rem;">';
+                commands.forEach(cmd => {
+                    const name = cmd.name || 'unknown';
+                    const desc = cmd.description || '';
+                    commandsList += `<li><strong>/${name}</strong>${desc ? ' - ' + desc.substring(0, 50) : ''}</li>`;
+                });
+                commandsList += '</ul>';
+            } else {
+                commandsList = `${commands.length} commands available`;
+            }
 
             msg.innerHTML = `
                 <div class="message-header">
-                    <span class="message-type">${label}</span>
+                    <span class="message-type">📋 Commands</span>
                     <span class="message-time">${time}</span>
                 </div>
-                <div class="message-content">${JSON.stringify(data, null, 2)}</div>
+                <div class="message-content">${commandsList}</div>
             `;
 
             container.appendChild(msg);
@@ -485,17 +683,42 @@
             msg.className = `message ${type}`;
 
             const time = new Date().toLocaleTimeString();
-
             msg.innerHTML = `
                 <div class="message-header">
-                    <span class="message-type">System</span>
+                    <span class="message-type">ℹ️ System</span>
                     <span class="message-time">${time}</span>
                 </div>
-                <div class="message-content">${text}</div>
+                <div class="message-content">${escapeHtml(text)}</div>
             `;
 
             container.appendChild(msg);
             container.scrollTop = container.scrollHeight;
+        }
+
+        // Add error message
+        function addErrorMessage(text) {
+            const container = document.getElementById('messagesContainer');
+            const msg = document.createElement('div');
+            msg.className = 'message error';
+
+            const time = new Date().toLocaleTimeString();
+            msg.innerHTML = `
+                <div class="message-header">
+                    <span class="message-type">❌ Error</span>
+                    <span class="message-time">${time}</span>
+                </div>
+                <div class="message-content">${escapeHtml(text)}</div>
+            `;
+
+            container.appendChild(msg);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         // Enable input
@@ -580,9 +803,7 @@
                 id: messageIdCounter++
             };
 
-            addMessage('request', 'session/resume', request);
             ws.send(JSON.stringify(request));
-
             // Listen for resume response (handled in handleMessage)
         }
 
