@@ -44,31 +44,7 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 	defer conn.Close()
 
 	var currentSession *session.Session
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Goroutine: Read from agent and send to WebSocket
-	fromAgent := make(chan []byte, 10)
-	go func() {
-		for {
-			select {
-			case msg := <-fromAgent:
-				// Log relay->client message
-				if currentSession != nil && currentSession.DB != nil {
-					if err := currentSession.DB.LogMessage(currentSession.ID, db.DirectionRelayToClient, msg); err != nil {
-						log.Printf("[WS:%s] failed to log relay->client message: %v", currentSession.ID[:8], err)
-					}
-				}
-
-				if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-					log.Printf("websocket write error: %v", err)
-					return
-				}
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
+	var currentClientID string
 
 	// Main loop: Read from WebSocket
 	for {
@@ -90,7 +66,10 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			Method string `json:"method"`
 			ID     int    `json:"id"`
 		}
-		json.Unmarshal(message, &msgType)
+		if err := json.Unmarshal(message, &msgType); err != nil {
+			// Log but don't fail - we'll parse properly below
+			log.Printf("[WS] failed to detect message type: %v", err)
+		}
 
 		// If no method field, this is a response from the client - forward to agent
 		if msgType.Method == "" {
@@ -100,7 +79,12 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 					preview = preview[:100] + "..."
 				}
 				log.Printf("[WS:%s] Client response (id=%d) -> Agent: %s", currentSession.ID[:8], msgType.ID, preview)
-				currentSession.ToAgent <- append(message, '\n')
+				select {
+				case currentSession.ToAgent <- append(message, '\n'):
+					// Successfully sent
+				case <-currentSession.Context.Done():
+					log.Printf("[WS:%s] Session context done, cannot forward client response", currentSession.ID[:8])
+				}
 			}
 			continue
 		}
@@ -123,7 +107,9 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 				continue
 			}
 
-			sess, err := s.sessionMgr.CreateSession(ctx, params.WorkingDirectory)
+			// Use context.Background() so session outlives this WebSocket connection
+			// Sessions should persist even after client disconnects (for resume)
+			sess, err := s.sessionMgr.CreateSession(context.Background(), params.WorkingDirectory)
 			if err != nil {
 				s.sendLLMError(conn, errors.NewAgentConnectionError(params.WorkingDirectory, 1, 10000, err.Error()), req.ID)
 				continue
@@ -131,16 +117,19 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 
 			currentSession = sess
 
-			// Start forwarding agent messages to WebSocket
-			go func() {
-				for msg := range sess.FromAgent {
-					fromAgent <- msg
-				}
-			}()
+			// Attach this client to the session FIRST
+			// This ensures the client is ready to receive messages when broadcaster starts
+			currentClientID = sess.AttachClient(conn)
 
-			// Send response
-			result := map[string]interface{}{"sessionId": sess.ID}
-			s.sendResponse(conn, result, req.ID)
+			// THEN start broadcaster (will consume buffered messages from FromAgent)
+			sess.StartBroadcaster()
+
+			// Send response with both session ID and client ID
+			result := map[string]interface{}{
+				"sessionId": sess.ID,
+				"clientId":  currentClientID,
+			}
+			s.sendResponseSafe(conn, sess, currentClientID, result, req.ID)
 
 		case "session/resume":
 			var params struct {
@@ -159,18 +148,17 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			}
 
 			currentSession = sess
-			log.Printf("[WS:%s] Client resuming session", sess.ID[:8])
 
-			// Start forwarding agent messages to WebSocket
-			go func() {
-				for msg := range sess.FromAgent {
-					fromAgent <- msg
-				}
-			}()
+			// Attach this client to the session
+			currentClientID = sess.AttachClient(conn)
+			log.Printf("[WS:%s] Client %s resuming session", sess.ID[:8], currentClientID)
 
-			// Send response with session ID
-			result := map[string]interface{}{"sessionId": sess.ID}
-			s.sendResponse(conn, result, req.ID)
+			// Send response with both session ID and client ID
+			result := map[string]interface{}{
+				"sessionId": sess.ID,
+				"clientId":  currentClientID,
+			}
+			s.sendResponseSafe(conn, sess, currentClientID, result, req.ID)
 
 		case "session/prompt":
 			// Forward to agent, translating "content" to "prompt" per ACP spec
@@ -193,7 +181,12 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 				"sessionId": currentSession.AgentSessionID, // Use agent's session ID, not relay's
 				"prompt":    json.RawMessage(params.Content),
 			}
-			agentParamsJSON, _ := json.Marshal(agentParams)
+			agentParamsJSON, err := json.Marshal(agentParams)
+			if err != nil {
+				log.Printf("[WS:%s] failed to marshal agent params: %v", currentSession.ID[:8], err)
+				s.sendLLMError(conn, errors.NewParseError("internal error marshaling params"), req.ID)
+				continue
+			}
 
 			agentReq := jsonrpc.Request{
 				JSONRPC: "2.0",
@@ -202,9 +195,20 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 				ID:      req.ID,
 			}
 
-			reqData, _ := json.Marshal(agentReq)
+			reqData, err := json.Marshal(agentReq)
+			if err != nil {
+				log.Printf("[WS:%s] failed to marshal agent request: %v", currentSession.ID[:8], err)
+				s.sendLLMError(conn, errors.NewParseError("internal error marshaling request"), req.ID)
+				continue
+			}
 			reqData = append(reqData, '\n')
-			currentSession.ToAgent <- reqData
+			select {
+			case currentSession.ToAgent <- reqData:
+				// Successfully sent
+			case <-currentSession.Context.Done():
+				log.Printf("[WS:%s] Session context done, cannot send prompt to agent", currentSession.ID[:8])
+				s.sendLLMError(conn, errors.NewAgentConnectionError("", 0, 0, "session closed"), req.ID)
+			}
 
 		default:
 			// Forward other methods to agent as-is
@@ -213,29 +217,62 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 				continue
 			}
 
-			reqData, _ := json.Marshal(req)
+			reqData, err := json.Marshal(req)
+			if err != nil {
+				log.Printf("[WS:%s] failed to marshal request: %v", currentSession.ID[:8], err)
+				s.sendLLMError(conn, errors.NewParseError("internal error marshaling request"), req.ID)
+				continue
+			}
 			reqData = append(reqData, '\n')
-			currentSession.ToAgent <- reqData
+			select {
+			case currentSession.ToAgent <- reqData:
+				// Successfully sent
+			case <-currentSession.Context.Done():
+				log.Printf("[WS:%s] Session context done, cannot forward request to agent", currentSession.ID[:8])
+				s.sendLLMError(conn, errors.NewAgentConnectionError("", 0, 0, "session closed"), req.ID)
+			}
 		}
 	}
 
-	// Cleanup: Don't close the session, just detach from it
-	// This allows the session to be resumed later
-	if currentSession != nil {
-		log.Printf("[WS:%s] Client disconnected, session remains active for resumption", currentSession.ID[:8])
+	// Cleanup: Detach client from session (session remains active for resumption)
+	if currentSession != nil && currentClientID != "" {
+		currentSession.DetachClient(currentClientID)
+		log.Printf("[WS:%s] Client %s disconnected, session remains active for resumption", currentSession.ID[:8], currentClientID)
 	}
 }
 
 func (s *Server) sendResponse(conn *websocket.Conn, result interface{}, id *json.RawMessage) {
-	resultData, _ := json.Marshal(result)
+	s.sendResponseSafe(conn, nil, "", result, id)
+}
+
+func (s *Server) sendResponseSafe(conn *websocket.Conn, sess *session.Session, clientID string, result interface{}, id *json.RawMessage) {
+	resultData, err := json.Marshal(result)
+	if err != nil {
+		log.Printf("Failed to marshal result: %v", err)
+		return
+	}
 	resp := jsonrpc.Response{
 		JSONRPC: "2.0",
 		Result:  resultData,
 		ID:      id,
 	}
 
-	data, _ := json.Marshal(resp)
-	conn.WriteMessage(websocket.TextMessage, data)
+	data, err := json.Marshal(resp)
+	if err != nil {
+		log.Printf("Failed to marshal response: %v", err)
+		return
+	}
+
+	// Use SafeWriteMessage if we have session and client ID (to avoid race with delivery goroutine)
+	if sess != nil && clientID != "" {
+		if err := sess.SafeWriteMessage(clientID, websocket.TextMessage, data); err != nil {
+			log.Printf("Failed to send response to client %s: %v", clientID, err)
+		}
+	} else {
+		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+			log.Printf("Failed to write response to websocket: %v", err)
+		}
+	}
 }
 
 func (s *Server) sendError(conn *websocket.Conn, code int, message string, id *json.RawMessage) {
@@ -248,8 +285,14 @@ func (s *Server) sendError(conn *websocket.Conn, code int, message string, id *j
 		ID: id,
 	}
 
-	data, _ := json.Marshal(resp)
-	conn.WriteMessage(websocket.TextMessage, data)
+	data, err := json.Marshal(resp)
+	if err != nil {
+		log.Printf("Failed to marshal error response: %v", err)
+		return
+	}
+	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+		log.Printf("Failed to write error response: %v", err)
+	}
 }
 
 func (s *Server) sendLLMError(conn *websocket.Conn, err *jsonrpc.Error, id *json.RawMessage) {
@@ -259,6 +302,12 @@ func (s *Server) sendLLMError(conn *websocket.Conn, err *jsonrpc.Error, id *json
 		ID:      id,
 	}
 
-	data, _ := json.Marshal(resp)
-	conn.WriteMessage(websocket.TextMessage, data)
+	data, marshalErr := json.Marshal(resp)
+	if marshalErr != nil {
+		log.Printf("Failed to marshal LLM error response: %v", marshalErr)
+		return
+	}
+	if writeErr := conn.WriteMessage(websocket.TextMessage, data); writeErr != nil {
+		log.Printf("Failed to write LLM error response: %v", writeErr)
+	}
 }

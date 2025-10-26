@@ -16,8 +16,9 @@ import sqlite3
 import sys
 import json
 from datetime import datetime
+from pathlib import Path
 
-DB_PATH = "./relay-messages.db"
+DB_PATH = str(Path.home() / ".local" / "share" / "acp-relay" / "db.sqlite")
 
 def list_sessions(conn):
     """List all sessions with message counts"""

@@ -24,7 +24,7 @@ import json
 import sys
 
 # Configuration
-RELAY_WS_URL = "ws://localhost:8081"
+RELAY_WS_URL = "ws://localhost:23891"
 WORKING_DIR = "/tmp"
 
 async def send_message(websocket, method, params, msg_id):
@@ -117,11 +117,13 @@ async def chat_session():
 
             session_msgs = await receive_messages(websocket, 1)
 
-            # Extract session ID from response
+            # Extract session ID and client ID from response
             session_id = None
+            client_id = None
             for msg in session_msgs:
                 if msg.get("id") == 1 and "result" in msg:
                     session_id = msg["result"].get("sessionId")
+                    client_id = msg["result"].get("clientId")
                     break
 
             if not session_id:
@@ -129,6 +131,7 @@ async def chat_session():
                 return
 
             print(f"\n✅ Session created: {session_id}")
+            print(f"   Client ID: {client_id}")
 
             # Step 2: Send a prompt
             print("\n" + "="*60)
@@ -167,7 +170,7 @@ async def chat_session():
             print("   • Handle user input for interactive chat")
 
     except websockets.exceptions.ConnectionRefused:
-        print("❌ Cannot connect to relay server at ws://localhost:8081")
+        print("❌ Cannot connect to relay server at ws://localhost:23891")
         print("   Make sure the relay server is running:")
         print("   $ go run cmd/relay/main.go --config config.yaml")
         sys.exit(1)

@@ -20,6 +20,7 @@ import websockets
 import json
 import sqlite3
 from datetime import datetime
+from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical, ScrollableContainer
 from textual.widgets import Header, Footer, Input, Static, RichLog, Button, ListView, ListItem, Label, ProgressBar
@@ -28,9 +29,9 @@ from textual.message import Message
 from textual.screen import ModalScreen
 
 # Configuration
-RELAY_WS_URL = "ws://localhost:8081"
+RELAY_WS_URL = "ws://localhost:23891"
 WORKING_DIR = "/tmp"
-DB_PATH = "./relay-messages.db"
+DB_PATH = str(Path.home() / ".local" / "share" / "acp-relay" / "db.sqlite")
 
 
 class ChatMessage(Static):
@@ -319,14 +320,12 @@ class ACPChatApp(App):
         self.title = "🤖 ACP Agent Chat"
         self.sub_title = "Starting..."
 
-        # Get all sessions from database
-        sessions = get_all_sessions()
-
         # Show session selection modal using run_worker to ensure we're in worker context
         async def show_session_selector():
             try:
+                # Get all sessions from database and show selector
+                sessions = get_all_sessions()
                 result = await self.push_screen_wait(SessionSelectionScreen(sessions))
-                self.notify(f"Session selection result: {result}")  # Debug
 
                 if not result:
                     # Modal was dismissed without selection - default to creating new session
@@ -339,11 +338,15 @@ class ACPChatApp(App):
                 elif result.get("action") == "resume":
                     # Open existing session (view or resume)
                     session = result.get("session")
-                    self.notify(f"Opening session: {session}")  # Debug
                     if session:
                         if session.get("is_active"):
                             # Try to resume active session
-                            await self.resume_session(session)
+                            session_id = session.get("id")
+                            resumed = await self.resume_session(session_id)
+                            if not resumed:
+                                # Resume failed, create new session
+                                self.notify("Resume failed, creating new session", severity="warning")
+                                await self.create_new_session()
                         else:
                             # View closed session (read-only)
                             await self.view_session(session)
@@ -361,6 +364,49 @@ class ACPChatApp(App):
                 await self.create_new_session()
 
         self.run_worker(show_session_selector, exclusive=True)
+
+    async def resume_session(self, session_id):
+        """Resume an existing session"""
+        self.sub_title = f"Resuming {session_id[:8]}..."
+        input_widget = self.query_one("#chat-input", Input)
+        input_widget.focus()
+
+        try:
+            # Connect to relay server
+            self.websocket = await websockets.connect(RELAY_WS_URL)
+            self.update_status(f"Resuming session {session_id[:8]}...")
+
+            # Try to resume
+            await self.send_message("session/resume", {"sessionId": session_id}, 1)
+
+            # Wait for resume response
+            raw_msg = await asyncio.wait_for(self.websocket.recv(), timeout=5.0)
+            msg = json.loads(raw_msg)
+
+            if msg.get("id") == 1 and "result" in msg:
+                self.session_id = msg["result"].get("sessionId")
+                self.sub_title = f"Session: {self.session_id[:8]}"
+                self.update_status("✨ Resumed existing session! (Ctrl+C to exit)")
+                self.notify("✨ Resumed existing session!", severity="information")
+
+                # Start message receiver
+                asyncio.create_task(self.receive_messages())
+                return True
+
+            elif "error" in msg:
+                error_msg = msg['error'].get('message', 'unknown')
+                self.update_status(f"⚠️  Resume failed: {error_msg}")
+                self.notify(f"Resume failed: {error_msg}", severity="warning")
+                return False
+
+        except asyncio.TimeoutError:
+            self.update_status("⚠️  Resume timed out")
+            self.notify("Resume timed out - creating new session", severity="warning")
+            return False
+        except Exception as e:
+            self.update_status(f"❌ Resume error: {e}")
+            self.notify(f"Resume failed: {e}", severity="error")
+            return False
 
     async def create_new_session(self):
         """Create a new session"""
@@ -420,50 +466,6 @@ class ACPChatApp(App):
         except Exception as e:
             self.update_status(f"❌ Error: {e}")
             self.notify(f"Failed to load session: {e}", severity="error")
-
-    async def resume_session(self, session: dict):
-        """Resume an existing active session"""
-        self.session_id = session["id"]
-        self.sub_title = f"Resuming {self.session_id[:8]}..."
-
-        input_widget = self.query_one("#chat-input", Input)
-
-        try:
-            # Connect to relay server
-            self.update_status(f"Connecting to relay server...")
-            self.websocket = await websockets.connect(RELAY_WS_URL)
-
-            if not self.websocket:
-                raise Exception("Failed to establish WebSocket connection")
-
-            self.update_status(f"Resuming session {self.session_id[:8]}...")
-
-            # Load previous messages from database
-            await self.load_session_history()
-
-            self.sub_title = f"Session: {self.session_id[:8]}"
-            self.update_status("✅ Session resumed! (Ctrl+C to exit)")
-            input_widget.focus()
-
-            # Start message receiver
-            asyncio.create_task(self.receive_messages())
-
-        except Exception as e:
-            error_str = str(e)
-            # Check if this is a "session not found" error (stale session)
-            if "session" in error_str.lower() and ("not exist" in error_str.lower() or "not found" in error_str.lower()):
-                # Session is stale - mark as closed and view in read-only mode
-                mark_session_closed(self.session_id, "stale/expired")
-                # Update session dict to reflect closed status
-                session["is_active"] = False
-                session["closed_at"] = "stale"
-                # Switch to view mode silently
-                await self.view_session(session)
-            else:
-                self.update_status(f"❌ Error: {e}")
-                self.notify(f"Failed to resume session: {e}", severity="error")
-                import traceback
-                self.notify(f"Traceback: {traceback.format_exc()}", severity="error")
 
     async def load_session_history(self):
         """Load previous messages from the database"""

@@ -13,7 +13,7 @@ import asyncio
 import websockets
 import json
 
-RELAY_WS_URL = "ws://localhost:8081"
+RELAY_WS_URL = "ws://localhost:23891"
 WORKING_DIR = "/tmp"
 
 

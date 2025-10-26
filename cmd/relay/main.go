@@ -95,7 +95,7 @@ func main() {
 	wsSrv := wsserver.NewServer(sessionMgr)
 
 	// Create management server
-	mgmtSrv := mgmtserver.NewServer(cfg, sessionMgr)
+	mgmtSrv := mgmtserver.NewServer(cfg, sessionMgr, database)
 
 	// Start HTTP server in goroutine
 	go func() {

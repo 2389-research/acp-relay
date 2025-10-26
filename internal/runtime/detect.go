@@ -110,8 +110,8 @@ func detectColima() RuntimeInfo {
 		info.Version = parts[2]
 	}
 
-	// Check if running
-	statusOut, err := exec.Command("colima", "status").Output()
+	// Check if running (colima writes to stderr, so use CombinedOutput)
+	statusOut, err := exec.Command("colima", "status").CombinedOutput()
 	if err != nil {
 		info.Status = "stopped"
 		return info
@@ -120,11 +120,18 @@ func detectColima() RuntimeInfo {
 	if strings.Contains(string(statusOut), "colima is running") {
 		info.Status = "running"
 
-		// Find socket
+		// Find socket - check XDG location first (newer versions), then legacy location
 		home := getHome()
-		socketPath := filepath.Join(home, ".colima", "default", "docker.sock")
-		if _, err := os.Stat(socketPath); err == nil {
-			info.SocketPath = socketPath
+		socketPaths := []string{
+			filepath.Join(home, ".config", "colima", "default", "docker.sock"), // XDG location
+			filepath.Join(home, ".colima", "default", "docker.sock"),           // Legacy location
+		}
+
+		for _, socketPath := range socketPaths {
+			if _, err := os.Stat(socketPath); err == nil {
+				info.SocketPath = socketPath
+				break
+			}
 		}
 	} else {
 		info.Status = "stopped"

@@ -18,8 +18,9 @@ import sys
 import json
 import time
 from datetime import datetime
+from pathlib import Path
 
-DB_PATH = "./relay-messages.db"
+DB_PATH = str(Path.home() / ".local" / "share" / "acp-relay" / "db.sqlite")
 POLL_INTERVAL = 0.5  # seconds
 
 def format_message(msg_id, session_id, direction, msg_type, method, jsonrpc_id, raw_msg, timestamp):

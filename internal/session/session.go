@@ -6,11 +6,13 @@ package session
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"os/exec"
 	"sync"
 
+	"github.com/gorilla/websocket"
 	"github.com/harper/acp-relay/internal/db"
 )
 
@@ -63,6 +65,8 @@ func (s *Session) StartStdioBridge() {
 
 			if _, err := s.AgentStdin.Write(msg); err != nil {
 				log.Printf("[%s] error writing to agent stdin: %v", s.ID[:8], err)
+				// Notify all connected clients that the agent has failed
+				s.BroadcastError(fmt.Sprintf("agent stdin write failed: %v", err))
 				return
 			}
 		}
@@ -122,4 +126,35 @@ func (s *Session) StartStdioBridge() {
 			}
 		}
 	}()
+}
+
+// Connection manager delegation methods
+// These methods allow the WebSocket handler to interact with the ConnectionManager
+// without directly accessing the unexported connMgr field
+
+// AttachClient attaches a WebSocket connection to this session and returns a client ID
+func (s *Session) AttachClient(conn *websocket.Conn) string {
+	return s.connMgr.AttachClient(conn)
+}
+
+// DetachClient removes a client from this session
+func (s *Session) DetachClient(clientID string) {
+	s.connMgr.DetachClient(clientID)
+}
+
+// StartBroadcaster starts the broadcaster goroutine if not already running
+func (s *Session) StartBroadcaster() {
+	s.connMgr.StartBroadcaster()
+}
+
+// SafeWriteMessage writes a message to a client's WebSocket using the connection's write mutex
+// This ensures thread-safe writes when both the handler and delivery goroutine write to the same connection
+func (s *Session) SafeWriteMessage(clientID string, messageType int, data []byte) error {
+	return s.connMgr.SafeWriteMessage(clientID, messageType, data)
+}
+
+// BroadcastError sends an error notification to all connected clients
+// This is typically called when the agent process crashes or exits unexpectedly
+func (s *Session) BroadcastError(errorMessage string) {
+	s.connMgr.BroadcastError(errorMessage)
 }

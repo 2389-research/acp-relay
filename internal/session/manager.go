@@ -179,13 +179,12 @@ func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Sessio
 	m.sessions[sessionID] = sess
 	m.mu.Unlock()
 
-	// Initialize connection manager (but don't start broadcaster yet)
-	// Broadcaster will be started when WebSocket server is updated to use ConnectionManager
+	// Initialize connection manager
+	// Broadcaster will be started when first WebSocket client attaches (via StartBroadcaster)
 	sess.connMgr = NewConnectionManager(sess)
-	// TODO: sess.connMgr.StartBroadcaster() will be called from WebSocket handler
 
 	// Start stdio bridge (works for both modes)
-	go sess.StartStdioBridge()
+	sess.StartStdioBridge()
 
 	// Send ACP initialize
 	if err := sess.SendInitialize(); err != nil {

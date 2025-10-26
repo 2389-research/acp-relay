@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACP Relay - Web Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: #252526;
+            padding: 1rem;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .status {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #666;
+        }
+
+        .status-indicator.connected {
+            background: #4ec9b0;
+            box-shadow: 0 0 8px #4ec9b0;
+        }
+
+        .session-info {
+            font-size: 0.9rem;
+            color: #858585;
+        }
+
+        .session-id {
+            color: #4ec9b0;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+
+        .controls {
+            padding: 1rem;
+            background: #252526;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        button {
+            background: #0e639c;
+            color: #fff;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        button:hover {
+            background: #1177bb;
+        }
+
+        button:disabled {
+            background: #444;
+            cursor: not-allowed;
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .message {
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            background: #252526;
+            border-radius: 4px;
+            border-left: 3px solid #666;
+        }
+
+        .message.request {
+            border-left-color: #4ec9b0;
+        }
+
+        .message.response {
+            border-left-color: #569cd6;
+        }
+
+        .message.notification {
+            border-left-color: #dcdcaa;
+        }
+
+        .message.error {
+            border-left-color: #f48771;
+            background: #2d2424;
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .message-type {
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .message-time {
+            color: #858585;
+        }
+
+        .message-content {
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .input-container {
+            padding: 1rem;
+            background: #252526;
+            border-top: 1px solid #3e3e42;
+        }
+
+        .input-form {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        textarea {
+            flex: 1;
+            background: #3c3c3c;
+            color: #d4d4d4;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 0.75rem;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 0.9rem;
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #0e639c;
+        }
+
+        .send-button {
+            align-self: flex-end;
+        }
+
+        .working-dir-input {
+            flex: 1;
+            background: #3c3c3c;
+            color: #d4d4d4;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 0.5rem;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+
+        .working-dir-input:focus {
+            outline: none;
+            border-color: #0e639c;
+        }
+
+        .sessions-panel {
+            width: 300px;
+            background: #252526;
+            border-right: 1px solid #3e3e42;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sessions-header {
+            padding: 1rem;
+            border-bottom: 1px solid #3e3e42;
+            font-weight: 600;
+        }
+
+        .sessions-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .session-item {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #3e3e42;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .session-item:hover {
+            background: #2a2d2e;
+        }
+
+        .session-item.active {
+            background: #264f78;
+            border-left: 3px solid #4ec9b0;
+        }
+
+        .session-item-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.25rem;
+        }
+
+        .session-item-id {
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: #4ec9b0;
+        }
+
+        .session-item-status {
+            font-size: 0.75rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 3px;
+            background: #666;
+        }
+
+        .session-item-status.active {
+            background: #4ec9b0;
+            color: #1e1e1e;
+        }
+
+        .session-item-info {
+            font-size: 0.75rem;
+            color: #858585;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        body {
+            display: flex;
+            flex-direction: row;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div class="sessions-panel">
+        <div class="sessions-header">
+            Sessions
+            <button onclick="refreshSessions()" style="float: right; padding: 0.25rem 0.5rem; font-size: 0.75rem;">↻ Refresh</button>
+        </div>
+        <div class="sessions-list" id="sessionsList"></div>
+    </div>
+
+    <div class="main-content">
+    <header>
+        <h1>ACP Relay</h1>
+        <div class="status">
+            <div class="status-indicator" id="statusIndicator"></div>
+            <span id="statusText">Disconnected</span>
+            <span class="session-info">
+                Session: <span class="session-id" id="sessionId">None</span>
+            </span>
+        </div>
+    </header>
+
+    <div class="controls">
+        <input
+            type="text"
+            id="workingDir"
+            class="working-dir-input"
+            placeholder="Working directory (optional)"
+            value="">
+        <button id="newSessionBtn" onclick="createNewSession()">New Session</button>
+        <button id="clearBtn" onclick="clearMessages()">Clear Messages</button>
+    </div>
+
+    <div class="messages-container" id="messagesContainer"></div>
+
+    <div class="input-container">
+        <form class="input-form" onsubmit="sendPrompt(event)">
+            <textarea
+                id="promptInput"
+                placeholder="Enter your prompt here..."
+                disabled></textarea>
+            <button type="submit" class="send-button" id="sendBtn" disabled>Send</button>
+        </form>
+    </div>
+    </div> <!-- end main-content -->
+
+    <script>
+        let ws = null;
+        let sessionId = null;
+        let messageIdCounter = 1;
+
+        // Connect to WebSocket
+        function connect() {
+            const wsUrl = 'ws://localhost:23891';
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                updateStatus(true);
+                addSystemMessage('Connected to relay');
+            };
+
+            ws.onclose = () => {
+                updateStatus(false);
+                addSystemMessage('Disconnected from relay');
+                setTimeout(connect, 2000); // Auto-reconnect
+            };
+
+            ws.onerror = (error) => {
+                addSystemMessage('WebSocket error: ' + error.message, 'error');
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    handleMessage(msg);
+                } catch (e) {
+                    addSystemMessage('Failed to parse message: ' + e.message, 'error');
+                }
+            };
+        }
+
+        // Update connection status
+        function updateStatus(connected) {
+            const indicator = document.getElementById('statusIndicator');
+            const text = document.getElementById('statusText');
+            const newSessionBtn = document.getElementById('newSessionBtn');
+
+            if (connected) {
+                indicator.classList.add('connected');
+                text.textContent = 'Connected';
+                newSessionBtn.disabled = false;
+            } else {
+                indicator.classList.remove('connected');
+                text.textContent = 'Disconnected';
+                newSessionBtn.disabled = true;
+                disableInput();
+            }
+        }
+
+        // Create new session
+        function createNewSession() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                addSystemMessage('Not connected to relay', 'error');
+                return;
+            }
+
+            const workingDir = document.getElementById('workingDir').value.trim();
+            const params = {};
+            if (workingDir) {
+                params.workingDirectory = workingDir;
+            }
+
+            const request = {
+                jsonrpc: "2.0",
+                method: "session/new",
+                params: params,
+                id: messageIdCounter++
+            };
+
+            addMessage('request', 'session/new', request);
+            ws.send(JSON.stringify(request));
+        }
+
+        // Send prompt
+        function sendPrompt(event) {
+            event.preventDefault();
+
+            if (!sessionId) {
+                addSystemMessage('No active session', 'error');
+                return;
+            }
+
+            const input = document.getElementById('promptInput');
+            const text = input.value.trim();
+
+            if (!text) return;
+
+            const request = {
+                jsonrpc: "2.0",
+                method: "session/prompt",
+                params: {
+                    sessionId: sessionId,
+                    content: [{
+                        type: "text",
+                        text: text
+                    }]
+                },
+                id: messageIdCounter++
+            };
+
+            addMessage('request', 'session/prompt', request);
+            ws.send(JSON.stringify(request));
+            input.value = '';
+        }
+
+        // Handle incoming message
+        function handleMessage(msg) {
+            if (msg.error) {
+                addMessage('error', 'Error', msg);
+                return;
+            }
+
+            // Check if it's a session/new or session/resume response
+            if (msg.result && msg.result.sessionId) {
+                sessionId = msg.result.sessionId;
+                document.getElementById('sessionId').textContent = sessionId;
+                enableInput();
+                const isResume = msg.id > 1; // ID 1 is session/new or resume attempt, >1 is likely resume
+                addMessage('response', isResume ? 'session/resume' : 'session/new', msg);
+                refreshSessions(); // Refresh sessions list to highlight active session
+                return;
+            }
+
+            // Notification (no id)
+            if (msg.method && !msg.id) {
+                addMessage('notification', msg.method, msg);
+                return;
+            }
+
+            // Response with result
+            if (msg.result) {
+                addMessage('response', 'Response', msg);
+                return;
+            }
+
+            // Unknown message type
+            addMessage('notification', 'Unknown', msg);
+        }
+
+        // Add message to UI
+        function addMessage(type, label, data) {
+            const container = document.getElementById('messagesContainer');
+            const msg = document.createElement('div');
+            msg.className = `message ${type}`;
+
+            const time = new Date().toLocaleTimeString();
+
+            msg.innerHTML = `
+                <div class="message-header">
+                    <span class="message-type">${label}</span>
+                    <span class="message-time">${time}</span>
+                </div>
+                <div class="message-content">${JSON.stringify(data, null, 2)}</div>
+            `;
+
+            container.appendChild(msg);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Add system message
+        function addSystemMessage(text, type = 'notification') {
+            const container = document.getElementById('messagesContainer');
+            const msg = document.createElement('div');
+            msg.className = `message ${type}`;
+
+            const time = new Date().toLocaleTimeString();
+
+            msg.innerHTML = `
+                <div class="message-header">
+                    <span class="message-type">System</span>
+                    <span class="message-time">${time}</span>
+                </div>
+                <div class="message-content">${text}</div>
+            `;
+
+            container.appendChild(msg);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Enable input
+        function enableInput() {
+            document.getElementById('promptInput').disabled = false;
+            document.getElementById('sendBtn').disabled = false;
+        }
+
+        // Disable input
+        function disableInput() {
+            document.getElementById('promptInput').disabled = true;
+            document.getElementById('sendBtn').disabled = true;
+        }
+
+        // Clear messages
+        function clearMessages() {
+            document.getElementById('messagesContainer').innerHTML = '';
+        }
+
+        // Fetch and display sessions
+        async function refreshSessions() {
+            try {
+                const response = await fetch('http://localhost:23892/api/sessions');
+                const sessions = await response.json();
+
+                const sessionsList = document.getElementById('sessionsList');
+                sessionsList.innerHTML = '';
+
+                if (sessions.length === 0) {
+                    sessionsList.innerHTML = '<div style="padding: 1rem; color: #858585; text-align: center;">No sessions found</div>';
+                    return;
+                }
+
+                sessions.forEach(session => {
+                    const item = document.createElement('div');
+                    item.className = 'session-item';
+                    if (session.id === sessionId) {
+                        item.classList.add('active');
+                    }
+
+                    const shortId = session.id.substring(0, 13);
+                    const statusClass = session.isActive ? 'active' : '';
+                    const statusText = session.isActive ? 'Active' : 'Closed';
+
+                    item.innerHTML = `
+                        <div class="session-item-header">
+                            <span class="session-item-id">${shortId}</span>
+                            <span class="session-item-status ${statusClass}">${statusText}</span>
+                        </div>
+                        <div class="session-item-info">${session.createdAt}</div>
+                        <div class="session-item-info">${session.workingDirectory || '/tmp'}</div>
+                    `;
+
+                    item.onclick = () => {
+                        if (session.isActive) {
+                            resumeSession(session.id);
+                        } else {
+                            addSystemMessage('Cannot resume closed session', 'error');
+                        }
+                    };
+
+                    sessionsList.appendChild(item);
+                });
+            } catch (error) {
+                addSystemMessage('Failed to fetch sessions: ' + error.message, 'error');
+            }
+        }
+
+        // Resume an existing session
+        function resumeSession(sessionIdToResume) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                addSystemMessage('Not connected to relay', 'error');
+                return;
+            }
+
+            const request = {
+                jsonrpc: "2.0",
+                method: "session/resume",
+                params: {
+                    sessionId: sessionIdToResume
+                },
+                id: messageIdCounter++
+            };
+
+            addMessage('request', 'session/resume', request);
+            ws.send(JSON.stringify(request));
+
+            // Listen for resume response (handled in handleMessage)
+        }
+
+        // Initialize
+        connect();
+        refreshSessions();
+        // Refresh sessions list every 5 seconds
+        setInterval(refreshSessions, 5000);
+    </script>
+</body>
+</html>

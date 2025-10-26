@@ -22,7 +22,7 @@ import json
 import sys
 
 # Configuration
-RELAY_URL = "http://localhost:8080"
+RELAY_URL = "http://localhost:23890"
 WORKING_DIR = "/tmp"
 
 def pretty_print(label, data):
@@ -145,7 +145,7 @@ def check_health():
     print("🏥 Checking relay server health...")
 
     try:
-        response = requests.get("http://localhost:8082/api/health")
+        response = requests.get("http://localhost:23892/api/health")
         if response.status_code == 200:
             health = response.json()
             print(f"✅ Relay server is {health.get('status', 'unknown')}")
@@ -155,7 +155,7 @@ def check_health():
             print(f"❌ Health check failed: {response.status_code}")
             return False
     except requests.exceptions.ConnectionError:
-        print("❌ Cannot connect to relay server at localhost:8082")
+        print("❌ Cannot connect to relay server at localhost:23892")
         print("   Make sure the relay server is running:")
         print("   $ go run cmd/relay/main.go --config config.yaml")
         return False
@@ -172,7 +172,7 @@ def main():
     try:
         session_id = create_session()
     except requests.exceptions.ConnectionError:
-        print("❌ Cannot connect to relay server at localhost:8080")
+        print("❌ Cannot connect to relay server at localhost:23890")
         print("   Make sure the relay server is running:")
         print("   $ go run cmd/relay/main.go --config config.yaml")
         sys.exit(1)

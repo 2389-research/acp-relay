@@ -286,7 +286,7 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 		fmt.Sprintf("%s:%s", hostWorkspace, m.config.WorkspaceContainerPath),
 	}
 
-	// Mount user's ~/.claude directory as read-only for agent configuration
+	// Mount user's Claude configuration files as read-only for agent configuration
 	home := os.Getenv("HOME")
 	if home == "" {
 		// Fallback to current directory if HOME not set
@@ -296,12 +296,23 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 			home = "."
 		}
 	}
+
+	// Mount ~/.claude directory
 	claudeDir := filepath.Join(home, ".claude")
 	if _, err := os.Stat(claudeDir); err == nil {
-		binds = append(binds, fmt.Sprintf("%s:/home/.claude:ro", claudeDir))
-		log.Printf("[%s] Mounting ~/.claude directory as read-only", sessionID)
+		binds = append(binds, fmt.Sprintf("%s:/root/.claude:ro", claudeDir))
+		log.Printf("[%s] Mounting ~/.claude directory as read-only to /root/.claude", sessionID)
 	} else {
 		log.Printf("[%s] ~/.claude directory not found, skipping mount", sessionID)
+	}
+
+	// Mount ~/.claude.json file if it exists
+	claudeJSON := filepath.Join(home, ".claude.json")
+	if _, err := os.Stat(claudeJSON); err == nil {
+		binds = append(binds, fmt.Sprintf("%s:/root/.claude.json:ro", claudeJSON))
+		log.Printf("[%s] Mounting ~/.claude.json as read-only to /root/.claude.json", sessionID)
+	} else {
+		log.Printf("[%s] ~/.claude.json not found, skipping mount", sessionID)
 	}
 
 	hostConfig := &container.HostConfig{

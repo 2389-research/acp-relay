@@ -20,7 +20,9 @@ import asyncio
 import websockets
 import json
 import sys
+import os
 from datetime import datetime
+from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
@@ -31,13 +33,15 @@ from rich.box import ROUNDED
 from rich.align import Align
 
 # Configuration
-RELAY_WS_URL = "ws://localhost:8081"
+RELAY_WS_URL = "ws://localhost:23891"
 WORKING_DIR = "/tmp"
+SESSION_FILE = Path.home() / ".acp-relay-session"
 
 console = Console()
 
 class ChatSession:
-    def __init__(self):
+    def __init__(self, session_id=None):
+        self.session_id = session_id
         self.messages = []
         self.current_response = ""
         self.is_typing = False
@@ -189,6 +193,37 @@ class ChatSession:
             output.append(text)
 
         return output
+
+
+def save_session_id(session_id):
+    """Save session ID to disk for resumption"""
+    try:
+        SESSION_FILE.write_text(session_id)
+        console.print(f"[dim]💾 Session ID saved to {SESSION_FILE}[/dim]")
+    except Exception as e:
+        console.print(f"[dim yellow]⚠️  Failed to save session: {e}[/dim yellow]")
+
+
+def load_session_id():
+    """Load saved session ID from disk"""
+    try:
+        if SESSION_FILE.exists():
+            session_id = SESSION_FILE.read_text().strip()
+            console.print(f"[dim]📂 Found saved session: {session_id}[/dim]")
+            return session_id
+    except Exception as e:
+        console.print(f"[dim yellow]⚠️  Failed to load session: {e}[/dim yellow]")
+    return None
+
+
+def clear_session_id():
+    """Clear saved session ID"""
+    try:
+        if SESSION_FILE.exists():
+            SESSION_FILE.unlink()
+            console.print(f"[dim]🗑️  Cleared saved session[/dim]")
+    except Exception:
+        pass
 
 
 async def send_message(websocket, method, params, msg_id):
@@ -363,16 +398,22 @@ async def receive_until_complete(websocket, expected_id, chat_session, live):
         return None
 
 
-def render_chat_ui(chat_session, show_input_prompt=False):
+def render_chat_ui(chat_session, show_input_prompt=False, session_id=None):
     """Render the complete chat UI with scrollable messages"""
     layout = Layout()
 
+    # Use session_id from chat_session if not explicitly provided
+    if session_id is None:
+        session_id = chat_session.session_id
+
     # Create header
+    header_text = Text()
+    header_text.append("🤖 ACP Agent Chat", style="bold magenta")
+    if session_id:
+        header_text.append(f"\n[Session: {session_id}]", style="dim")
+
     header = Panel(
-        Align.center(
-            Text("🤖 ACP Agent Chat", style="bold magenta"),
-            vertical="middle"
-        ),
+        Align.center(header_text, vertical="middle"),
         box=ROUNDED,
         style="bold blue"
     )
@@ -421,41 +462,75 @@ def render_chat_ui(chat_session, show_input_prompt=False):
 
 async def interactive_chat():
     """Main interactive chat session"""
-    chat_session = ChatSession()
+    chat_session = ChatSession()  # Will set session_id once we have it
 
     try:
         # Show connection screen
         with console.status("[bold green]Connecting to relay server...") as status:
             websocket = await websockets.connect(RELAY_WS_URL)
-            status.update("[bold green]Creating session...")
 
-            # Create session
-            await send_message(
-                websocket,
-                "session/new",
-                {"workingDirectory": WORKING_DIR},
-                1
-            )
-
-            # Get session ID
+            # Try to resume existing session first
+            saved_session_id = load_session_id()
             session_id = None
-            while True:
-                raw_msg = await websocket.recv()
-                msg = json.loads(raw_msg)
-                if msg.get("id") == 1 and "result" in msg:
-                    session_id = msg["result"].get("sessionId")
-                    break
 
+            if saved_session_id:
+                status.update(f"[bold green]Resuming session {saved_session_id[:13]}...")
+                await send_message(
+                    websocket,
+                    "session/resume",
+                    {"sessionId": saved_session_id},
+                    1
+                )
+
+                # Wait for resume response
+                try:
+                    raw_msg = await asyncio.wait_for(websocket.recv(), timeout=5.0)
+                    msg = json.loads(raw_msg)
+
+                    if msg.get("id") == 1 and "result" in msg:
+                        session_id = msg["result"].get("sessionId")
+                        status.update(f"[bold green]✅ Session resumed: {session_id}")
+                        console.print(f"[bold green]✨ Resumed existing session![/bold green]")
+                    elif "error" in msg:
+                        console.print(f"[dim yellow]⚠️  Resume failed: {msg['error'].get('message', 'unknown')}[/dim yellow]")
+                        clear_session_id()
+                except asyncio.TimeoutError:
+                    console.print("[dim yellow]⚠️  Resume timed out[/dim yellow]")
+                    clear_session_id()
+
+            # If resume failed or no saved session, create new session
             if not session_id:
-                console.print("[bold red]❌ Failed to create session[/bold red]")
-                return
+                status.update("[bold green]Creating new session...")
+                await send_message(
+                    websocket,
+                    "session/new",
+                    {"workingDirectory": WORKING_DIR},
+                    2
+                )
 
-            status.update(f"[bold green]✅ Session created: {session_id}")
+                # Get session ID
+                while True:
+                    raw_msg = await websocket.recv()
+                    msg = json.loads(raw_msg)
+                    if msg.get("id") == 2 and "result" in msg:
+                        session_id = msg["result"].get("sessionId")
+                        break
+
+                if not session_id:
+                    console.print("[bold red]❌ Failed to create session[/bold red]")
+                    return
+
+                # Save session ID for future resumption
+                save_session_id(session_id)
+                status.update(f"[bold green]✅ Session created: {session_id}")
+
+            # Set session ID on chat session object
+            chat_session.session_id = session_id
             await asyncio.sleep(1)
 
         # Start live display
         with Live(render_chat_ui(chat_session), console=console, refresh_per_second=10) as live:
-            msg_id = 2
+            msg_id = 3  # Start at 3 (1=resume, 2=new session)
 
             while True:
                 try:
@@ -472,6 +547,14 @@ async def interactive_chat():
 
                     if not user_input:
                         continue
+
+                    # Special command: clear session
+                    if user_input.lower() in ['/clear', '/new']:
+                        live.stop()
+                        console.print("[bold yellow]🗑️  Clearing saved session and starting fresh...[/bold yellow]")
+                        clear_session_id()
+                        console.print("[bold green]Please restart the chat to create a new session.[/bold green]")
+                        break
 
                     # Add user message to chat
                     chat_session.add_user_message(user_input)

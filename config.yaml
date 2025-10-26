@@ -1,9 +1,9 @@
 server:
-  http_port: 8080
+  http_port: 23890      # Creative port to avoid collisions (based on project 2389)
   http_host: "0.0.0.0"
-  websocket_port: 8081
+  websocket_port: 23891 # WebSocket on sequential port
   websocket_host: "0.0.0.0"
-  management_port: 8082
+  management_port: 23892 # Management API (localhost only)
   management_host: "127.0.0.1"
 
 agent:

@@ -185,3 +185,50 @@ func TestBroadcastToClients(t *testing.T) {
 		t.Errorf("Client2 message mismatch: got %s", string(client2.buffer[0]))
 	}
 }
+
+func TestGoroutineCleanupOnDetach(t *testing.T) {
+	sess := &Session{
+		ID:        "sess_test123",
+		FromAgent: make(chan []byte, 10),
+	}
+
+	cm := NewConnectionManager(sess)
+
+	// Attach a client (this starts a delivery goroutine)
+	clientID := cm.AttachClient(nil)
+
+	// Get reference to the client before detaching
+	cm.mu.RLock()
+	client, exists := cm.connections[clientID]
+	cm.mu.RUnlock()
+
+	if !exists {
+		t.Fatal("Client not found after attach")
+	}
+
+	// Verify deliveryChan is open initially
+	select {
+	case <-client.deliveryChan:
+		t.Error("deliveryChan should not have any pending signals initially")
+	default:
+		// Good - channel is empty
+	}
+
+	// Detach the client
+	cm.DetachClient(clientID)
+
+	// Verify deliveryChan is closed (this signals the delivery goroutine to exit)
+	_, ok := <-client.deliveryChan
+	if ok {
+		t.Error("deliveryChan should be closed after detach (to stop delivery goroutine)")
+	}
+
+	// Verify client is removed from connections map
+	cm.mu.RLock()
+	_, exists = cm.connections[clientID]
+	cm.mu.RUnlock()
+
+	if exists {
+		t.Error("Client should be removed from connections map after detach")
+	}
+}
