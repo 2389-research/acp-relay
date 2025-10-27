@@ -226,6 +226,14 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 		return nil, fmt.Errorf("failed to create workspace directory: %w", err)
 	}
 
+	// Use the user-specified working directory as the container path
+	// If empty, default to the configured workspace path
+	containerWorkingDir := workingDir
+	if containerWorkingDir == "" {
+		containerWorkingDir = m.config.WorkspaceContainerPath
+	}
+	log.Printf("[%s] Container working directory: %s (user requested: %s)", sessionID, containerWorkingDir, workingDir)
+
 	// 2. Build environment variables
 	// Start with user-configured env vars (from config - these are trusted)
 	envVars := []string{}
@@ -265,14 +273,15 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 	log.Printf("[%s] Container command: %v", sessionID, cmd)
 
 	containerConfig := &container.Config{
-		Image:     m.config.Image,
-		Cmd:       cmd,
-		Env:       envVars,
-		Tty:       false,
-		OpenStdin: true,
-		StdinOnce: false,
+		Image:      m.config.Image,
+		Cmd:        cmd,
+		Env:        envVars,
+		WorkingDir: containerWorkingDir,
+		Tty:        false,
+		OpenStdin:  true,
+		StdinOnce:  false,
 		// ENHANCEMENT: Add container labels
-		Labels:    m.buildContainerLabels(sessionID),
+		Labels: m.buildContainerLabels(sessionID),
 	}
 
 	// 4. Parse memory limit
@@ -283,7 +292,7 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 
 	// 5. Create host config with mounts and limits
 	binds := []string{
-		fmt.Sprintf("%s:%s", hostWorkspace, m.config.WorkspaceContainerPath),
+		fmt.Sprintf("%s:%s", hostWorkspace, containerWorkingDir),
 	}
 
 	// Mount user's Claude configuration files as read-only for agent configuration
@@ -297,20 +306,20 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 		}
 	}
 
-	// Mount ~/.claude directory
+	// Mount ~/.claude directory (read-write so agent can write debug logs)
 	claudeDir := filepath.Join(home, ".claude")
 	if _, err := os.Stat(claudeDir); err == nil {
-		binds = append(binds, fmt.Sprintf("%s:/root/.claude:ro", claudeDir))
-		log.Printf("[%s] Mounting ~/.claude directory as read-only to /root/.claude", sessionID)
+		binds = append(binds, fmt.Sprintf("%s:/root/.claude", claudeDir))
+		log.Printf("[%s] Mounting ~/.claude directory to /root/.claude", sessionID)
 	} else {
 		log.Printf("[%s] ~/.claude directory not found, skipping mount", sessionID)
 	}
 
-	// Mount ~/.claude.json file if it exists
+	// Mount ~/.claude.json file if it exists (read-write so agent can update settings)
 	claudeJSON := filepath.Join(home, ".claude.json")
 	if _, err := os.Stat(claudeJSON); err == nil {
-		binds = append(binds, fmt.Sprintf("%s:/root/.claude.json:ro", claudeJSON))
-		log.Printf("[%s] Mounting ~/.claude.json as read-only to /root/.claude.json", sessionID)
+		binds = append(binds, fmt.Sprintf("%s:/root/.claude.json", claudeJSON))
+		log.Printf("[%s] Mounting ~/.claude.json to /root/.claude.json", sessionID)
 	} else {
 		log.Printf("[%s] ~/.claude.json not found, skipping mount", sessionID)
 	}

@@ -92,7 +92,7 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 		// Parse as request
 		var req jsonrpc.Request
 		if err := json.Unmarshal(message, &req); err != nil {
-			s.sendLLMError(conn, errors.NewParseError(err.Error()), nil)
+			s.sendLLMError(conn, currentSession, currentClientID, errors.NewParseError(err.Error()), nil)
 			continue
 		}
 
@@ -103,7 +103,7 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 				WorkingDirectory string `json:"workingDirectory"`
 			}
 			if err := json.Unmarshal(req.Params, &params); err != nil {
-				s.sendLLMError(conn, errors.NewInvalidParamsError("workingDirectory", "string", "invalid or missing"), req.ID)
+				s.sendLLMError(conn, currentSession, currentClientID, errors.NewInvalidParamsError("workingDirectory", "string", "invalid or missing"), req.ID)
 				continue
 			}
 
@@ -111,7 +111,7 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			// Sessions should persist even after client disconnects (for resume)
 			sess, err := s.sessionMgr.CreateSession(context.Background(), params.WorkingDirectory)
 			if err != nil {
-				s.sendLLMError(conn, errors.NewAgentConnectionError(params.WorkingDirectory, 1, 10000, err.Error()), req.ID)
+				s.sendLLMError(conn, currentSession, currentClientID, errors.NewAgentConnectionError(params.WorkingDirectory, 1, 10000, err.Error()), req.ID)
 				continue
 			}
 
@@ -136,14 +136,14 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 				SessionID string `json:"sessionId"`
 			}
 			if err := json.Unmarshal(req.Params, &params); err != nil {
-				s.sendLLMError(conn, errors.NewInvalidParamsError("sessionId", "string", "invalid or missing"), req.ID)
+				s.sendLLMError(conn, currentSession, currentClientID, errors.NewInvalidParamsError("sessionId", "string", "invalid or missing"), req.ID)
 				continue
 			}
 
 			// Try to get existing session
 			sess, exists := s.sessionMgr.GetSession(params.SessionID)
 			if !exists {
-				s.sendLLMError(conn, errors.NewSessionNotFoundError(params.SessionID), req.ID)
+				s.sendLLMError(conn, currentSession, currentClientID, errors.NewSessionNotFoundError(params.SessionID), req.ID)
 				continue
 			}
 
@@ -163,7 +163,7 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 		case "session/prompt":
 			// Forward to agent, translating "content" to "prompt" per ACP spec
 			if currentSession == nil {
-				s.sendLLMError(conn, errors.NewSessionNotFoundError("no session"), req.ID)
+				s.sendLLMError(conn, currentSession, currentClientID, errors.NewSessionNotFoundError("no session"), req.ID)
 				continue
 			}
 
@@ -172,7 +172,7 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 				Content   json.RawMessage `json:"content"`
 			}
 			if err := json.Unmarshal(req.Params, &params); err != nil {
-				s.sendLLMError(conn, errors.NewInvalidParamsError("sessionId or content", "object", "invalid or missing"), req.ID)
+				s.sendLLMError(conn, currentSession, currentClientID, errors.NewInvalidParamsError("sessionId or content", "object", "invalid or missing"), req.ID)
 				continue
 			}
 
@@ -184,7 +184,7 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			agentParamsJSON, err := json.Marshal(agentParams)
 			if err != nil {
 				log.Printf("[WS:%s] failed to marshal agent params: %v", currentSession.ID[:8], err)
-				s.sendLLMError(conn, errors.NewParseError("internal error marshaling params"), req.ID)
+				s.sendLLMError(conn, currentSession, currentClientID, errors.NewParseError("internal error marshaling params"), req.ID)
 				continue
 			}
 
@@ -198,7 +198,7 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			reqData, err := json.Marshal(agentReq)
 			if err != nil {
 				log.Printf("[WS:%s] failed to marshal agent request: %v", currentSession.ID[:8], err)
-				s.sendLLMError(conn, errors.NewParseError("internal error marshaling request"), req.ID)
+				s.sendLLMError(conn, currentSession, currentClientID, errors.NewParseError("internal error marshaling request"), req.ID)
 				continue
 			}
 			reqData = append(reqData, '\n')
@@ -207,20 +207,20 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 				// Successfully sent
 			case <-currentSession.Context.Done():
 				log.Printf("[WS:%s] Session context done, cannot send prompt to agent", currentSession.ID[:8])
-				s.sendLLMError(conn, errors.NewAgentConnectionError("", 0, 0, "session closed"), req.ID)
+				s.sendLLMError(conn, currentSession, currentClientID, errors.NewAgentConnectionError("", 0, 0, "session closed"), req.ID)
 			}
 
 		default:
 			// Forward other methods to agent as-is
 			if currentSession == nil {
-				s.sendLLMError(conn, errors.NewSessionNotFoundError("no session"), req.ID)
+				s.sendLLMError(conn, currentSession, currentClientID, errors.NewSessionNotFoundError("no session"), req.ID)
 				continue
 			}
 
 			reqData, err := json.Marshal(req)
 			if err != nil {
 				log.Printf("[WS:%s] failed to marshal request: %v", currentSession.ID[:8], err)
-				s.sendLLMError(conn, errors.NewParseError("internal error marshaling request"), req.ID)
+				s.sendLLMError(conn, currentSession, currentClientID, errors.NewParseError("internal error marshaling request"), req.ID)
 				continue
 			}
 			reqData = append(reqData, '\n')
@@ -229,7 +229,7 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 				// Successfully sent
 			case <-currentSession.Context.Done():
 				log.Printf("[WS:%s] Session context done, cannot forward request to agent", currentSession.ID[:8])
-				s.sendLLMError(conn, errors.NewAgentConnectionError("", 0, 0, "session closed"), req.ID)
+				s.sendLLMError(conn, currentSession, currentClientID, errors.NewAgentConnectionError("", 0, 0, "session closed"), req.ID)
 			}
 		}
 	}
@@ -295,7 +295,7 @@ func (s *Server) sendError(conn *websocket.Conn, code int, message string, id *j
 	}
 }
 
-func (s *Server) sendLLMError(conn *websocket.Conn, err *jsonrpc.Error, id *json.RawMessage) {
+func (s *Server) sendLLMError(conn *websocket.Conn, sess *session.Session, clientID string, err *jsonrpc.Error, id *json.RawMessage) {
 	resp := jsonrpc.Response{
 		JSONRPC: "2.0",
 		Error:   err,
@@ -307,7 +307,15 @@ func (s *Server) sendLLMError(conn *websocket.Conn, err *jsonrpc.Error, id *json
 		log.Printf("Failed to marshal LLM error response: %v", marshalErr)
 		return
 	}
-	if writeErr := conn.WriteMessage(websocket.TextMessage, data); writeErr != nil {
-		log.Printf("Failed to write LLM error response: %v", writeErr)
+
+	// Use SafeWriteMessage if we have session and client ID (to avoid race with delivery goroutine)
+	if sess != nil && clientID != "" {
+		if writeErr := sess.SafeWriteMessage(clientID, websocket.TextMessage, data); writeErr != nil {
+			log.Printf("Failed to send LLM error to client %s: %v", clientID, writeErr)
+		}
+	} else {
+		if writeErr := conn.WriteMessage(websocket.TextMessage, data); writeErr != nil {
+			log.Printf("Failed to write LLM error response: %v", writeErr)
+		}
 	}
 }

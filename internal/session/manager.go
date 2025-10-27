@@ -192,14 +192,16 @@ func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Sessio
 		return nil, fmt.Errorf("failed to initialize agent: %w", err)
 	}
 
-	// Send session/new to agent
-	// For container mode, use the container workspace path, not the host path
+	// Send session/new to agent with the working directory
+	// In container mode, this is the container path (e.g. /tmp or /workspace)
+	// The container manager already mounted the host workspace at this path
 	agentWorkingDir := workingDir
-	if m.config.Mode == "container" {
-		agentWorkingDir = m.config.ContainerConfig.WorkspaceContainerPath
-		if agentWorkingDir == "" {
-			m.CloseSession(sessionID)
-			return nil, fmt.Errorf("container mode requires workspace_container_path to be set in config")
+	if agentWorkingDir == "" {
+		// Default to config's workspace path if not specified
+		if m.config.Mode == "container" {
+			agentWorkingDir = m.config.ContainerConfig.WorkspaceContainerPath
+		} else {
+			agentWorkingDir = "." // Current directory for process mode
 		}
 	}
 	if err := sess.SendSessionNew(agentWorkingDir); err != nil {
