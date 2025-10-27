@@ -113,6 +113,47 @@ agent:
   max_concurrent_sessions: 100
 ```
 
+## Authentication
+
+### Claude Code with Subscription Auth (Default)
+
+By default, ACP Relay is configured to use Claude Code with subscription-based authentication, which allows users with Claude Pro/Team subscriptions to authenticate using their existing accounts instead of requiring separate API keys.
+
+The default `config.yaml` uses an empty `ANTHROPIC_API_KEY`, which triggers the subscription authentication flow:
+
+```yaml
+agent:
+  command: "npx"
+  args: ["@zed-industries/claude-code-acp"]
+  env:
+    # Empty string enables Claude subscription auth
+    ANTHROPIC_API_KEY: ""
+    HOME: "${HOME}"
+    PATH: "${PATH}"
+```
+
+**Benefits:**
+- No need to manage separate API keys
+- Uses your existing Claude Pro/Team subscription
+- Unified billing and account management
+- OAuth-based authentication flow
+
+### Claude Code with API Key Auth
+
+If you prefer to use API key authentication instead, modify the config:
+
+```yaml
+agent:
+  env:
+    # Use environment variable for API key auth
+    ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+```
+
+Then set your API key:
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
 ### First-Time Setup
 
 For container mode, run the interactive setup:

@@ -10,7 +10,8 @@ agent:
   command: "npx"
   args: ["@zed-industries/claude-code-acp"]
   env:
-    ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+    # Set to empty string for Claude subscription auth, or "${ANTHROPIC_API_KEY}" for API key auth
+    ANTHROPIC_API_KEY: ""
     HOME: "${HOME}"
     PATH: "${PATH}"
   startup_timeout_seconds: 10
