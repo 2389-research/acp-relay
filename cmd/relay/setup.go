@@ -1,215 +1,100 @@
-// ABOUTME: Interactive setup subcommand for first-time configuration
-// ABOUTME: Detects runtimes, guides user through config, generates config file
+// ABOUTME: Interactive setup command for first-time configuration
+// ABOUTME: Guides users through runtime detection and config generation
 
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/harper/acp-relay/internal/runtime"
 	"github.com/harper/acp-relay/internal/xdg"
 )
 
 func runSetup() {
-	fmt.Println("acp-relay setup - Interactive Configuration")
-	fmt.Println("==========================================")
+	fmt.Println("🚀 ACP-Relay Interactive Setup")
 	fmt.Println()
 
-	reader := bufio.NewReader(os.Stdin)
+	// Detect container runtime
+	fmt.Println("🔍 Detecting container runtime...")
+	best := runtime.DetectBest()
 
-	// Step 1: Runtime Detection
-	fmt.Println("Step 1: Detecting container runtimes...")
-	fmt.Println()
-
-	allRuntimes := runtime.DetectAll()
-	availableRuntimes := []runtime.RuntimeInfo{}
-
-	for _, rt := range allRuntimes {
-		fmt.Printf("  %s: %s", rt.Name, rt.Status)
-		if rt.Version != "" {
-			fmt.Printf(" (v%s)", rt.Version)
-		}
-		if rt.SocketPath != "" {
-			fmt.Printf(" @ %s", rt.SocketPath)
-		}
-		fmt.Println()
-
-		if rt.Status == "available" || rt.Status == "running" {
-			availableRuntimes = append(availableRuntimes, rt)
-		}
-	}
-	fmt.Println()
-
-	if len(availableRuntimes) == 0 {
-		fmt.Println("❌ No container runtimes found!")
-		fmt.Println()
-		fmt.Println("Please install Docker or Colima:")
-		fmt.Println("  Docker: https://docs.docker.com/get-docker/")
-		fmt.Println("  Colima: brew install colima")
+	if best == nil {
+		fmt.Println("❌ No container runtime detected (Docker, Podman, or Colima)")
+		fmt.Println("   Install Docker: https://docs.docker.com/get-docker/")
+		fmt.Println("   Or install Colima: brew install colima && colima start")
 		os.Exit(1)
 	}
 
-	// Step 2: Runtime Selection
-	var selectedRuntime runtime.RuntimeInfo
-
-	if len(availableRuntimes) == 1 {
-		selectedRuntime = availableRuntimes[0]
-		fmt.Printf("✓ Auto-selected %s (only available runtime)\n", selectedRuntime.Name)
-	} else {
-		fmt.Println("Multiple runtimes available. Which would you like to use?")
-		for i, rt := range availableRuntimes {
-			fmt.Printf("  %d) %s (%s)\n", i+1, rt.Name, rt.Status)
-		}
-		fmt.Print("\nSelection [1]: ")
-
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Printf("Error reading input: %v\n", err)
-			os.Exit(1)
-		}
-		input = strings.TrimSpace(input)
-
-		if input == "" || input == "1" {
-			selectedRuntime = availableRuntimes[0]
-		} else {
-			// Parse selection
-			var choice int
-			fmt.Sscanf(input, "%d", &choice)
-			if choice < 1 || choice > len(availableRuntimes) {
-				fmt.Println("Invalid selection")
-				os.Exit(1)
-			}
-			selectedRuntime = availableRuntimes[choice-1]
-		}
-		fmt.Printf("✓ Selected %s\n", selectedRuntime.Name)
-	}
+	fmt.Printf("✅ Found: %s at %s\n", best.Name, best.SocketPath)
 	fmt.Println()
 
-	// Step 3: Path Configuration
-	fmt.Println("Step 3: Path configuration...")
-	fmt.Println()
+	// Get config directory
+	configDir := filepath.Join(xdg.ConfigHome(), "acp-relay")
+	configPath := filepath.Join(configDir, "config.yaml")
 
-	dataPath := xdg.DataHome()
-	fmt.Printf("Data directory [%s]: ", dataPath)
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		fmt.Printf("Error reading input: %v\n", err)
+	// Check if config already exists
+	if _, err := os.Stat(configPath); err == nil {
+		fmt.Printf("⚠️  Config already exists at: %s\n", configPath)
+		fmt.Println("   Delete it first if you want to regenerate.")
 		os.Exit(1)
 	}
-	input = strings.TrimSpace(input)
-	if input != "" {
-		dataPath = input
-	}
-	fmt.Printf("✓ Data directory: %s\n", dataPath)
-	fmt.Println()
-
-	configPath := filepath.Join(xdg.ConfigHome(), "config.yaml")
-	fmt.Printf("Config file [%s]: ", configPath)
-	input, err = reader.ReadString('\n')
-	if err != nil {
-		fmt.Printf("Error reading input: %v\n", err)
-		os.Exit(1)
-	}
-	input = strings.TrimSpace(input)
-	if input != "" {
-		configPath = input
-	}
-	fmt.Printf("✓ Config file: %s\n", configPath)
-	fmt.Println()
-
-	// Step 4: Verbosity Preference
-	fmt.Print("Enable verbose logging? [y/N]: ")
-	input, err = reader.ReadString('\n')
-	if err != nil {
-		fmt.Printf("Error reading input: %v\n", err)
-		os.Exit(1)
-	}
-	input = strings.TrimSpace(strings.ToLower(input))
-	verboseLogging := input == "y" || input == "yes"
-	if verboseLogging {
-		fmt.Println("✓ Verbose logging enabled")
-	} else {
-		fmt.Println("✓ Verbose logging disabled")
-	}
-	fmt.Println()
-
-	// Step 5: Generate Config
-	fmt.Println("Step 5: Generating configuration...")
-	fmt.Println()
-
-	configContent := generateConfig(selectedRuntime, dataPath, verboseLogging)
 
 	// Create config directory
-	configDir := filepath.Dir(configPath)
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		fmt.Printf("❌ Failed to create config directory: %v\n", err)
 		os.Exit(1)
 	}
 
+	// Generate config
+	dataDir := filepath.Join(xdg.DataHome(), "acp-relay")
+	configContent := fmt.Sprintf(`# ACP-Relay Configuration
+# Generated by setup command
+
+server:
+  http_port: 8080
+  http_host: "0.0.0.0"
+  websocket_port: 8081
+  websocket_host: "0.0.0.0"
+  management_port: 8082
+  management_host: "127.0.0.1"  # localhost only for security
+
+agent:
+  command: "/usr/local/bin/acp-agent"  # CHANGE THIS to your agent path
+  mode: "container"
+
+  env:
+    ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+
+  container:
+    image: "acp-relay-agent:latest"
+    docker_host: "unix://%s"
+    network_mode: "bridge"
+    memory_limit: "512m"
+    cpu_limit: 1.0
+    workspace_host_base: "%s/workspaces"
+    workspace_container_path: "/workspace"
+    auto_remove: true
+    startup_timeout_seconds: 10
+
+database:
+  path: "%s/relay-messages.db"
+`, best.SocketPath, dataDir, dataDir)
+
 	// Write config file
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		fmt.Printf("❌ Failed to write config file: %v\n", err)
+		fmt.Printf("❌ Failed to write config: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("✓ Config written to %s\n", configPath)
+	fmt.Printf("✅ Config generated at: %s\n", configPath)
 	fmt.Println()
-
-	// Step 6: Success
-	fmt.Println("==========================================")
-	fmt.Println("✅ Setup complete!")
+	fmt.Println("📝 Next steps:")
+	fmt.Println("   1. Edit config and set agent.command to your ACP agent binary path")
+	fmt.Println("   2. Set ANTHROPIC_API_KEY environment variable")
+	fmt.Println("   3. Build Docker image: docker build -t acp-relay-agent:latest .")
+	fmt.Println("   4. Start server: acp-relay serve --config", configPath)
 	fmt.Println()
-	fmt.Println("Next steps:")
-	fmt.Printf("  1. Review config: %s\n", configPath)
-	fmt.Printf("  2. Start server:  acp-relay serve --config %s\n", configPath)
-	fmt.Println()
-}
-
-func generateConfig(rt runtime.RuntimeInfo, dataPath string, verbose bool) string {
-	dbPath := filepath.Join(dataPath, "db.sqlite")
-
-	config := fmt.Sprintf(`# acp-relay configuration
-# Generated by: acp-relay setup
-
-server:
-  http_port: 23890      # Creative port to avoid collisions (based on project 2389)
-  http_host: "0.0.0.0"
-  websocket_port: 23891 # WebSocket on sequential port
-  websocket_host: "0.0.0.0"
-  management_port: 23892 # Management API (localhost only)
-  management_host: "127.0.0.1"
-
-agent:
-  command: "npx"
-  args: ["@zed-industries/claude-code-acp"]
-  mode: "process"
-  env:
-    ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"  # Set this in your environment
-    HOME: "${HOME}"
-    PATH: "${PATH}"
-  startup_timeout_seconds: 10
-  max_concurrent_sessions: 100
-
-  # Uncomment below to use container mode instead
-  # mode: "container"
-  # container:
-  #   image: "acp-relay-agent:latest"
-  #   docker_host: "unix://%s"
-  #   network_mode: "bridge"
-  #   memory_limit: "512m"
-  #   cpu_limit: 1.0
-  #   workspace_host_base: "/path/to/workspaces"
-  #   workspace_container_path: "/workspace"
-  #   auto_remove: true
-  #   startup_timeout_seconds: 10
-
-database:
-  path: "%s"
-`, rt.SocketPath, dbPath)
-
-	return config
+	fmt.Println("🎉 Setup complete!")
 }
