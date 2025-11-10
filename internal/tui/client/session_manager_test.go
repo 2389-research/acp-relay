@@ -76,3 +76,19 @@ func TestSessionManager_UpdateStatus(t *testing.T) {
 	updated, _ := sm.Get("sess-123")
 	assert.Equal(t, StatusIdle, updated.Status)
 }
+
+func TestSessionManager_Rename(t *testing.T) {
+	sm := NewSessionManager()
+	sm.Create("sess-123", "/tmp", "Original Name")
+
+	// Test successful rename
+	err := sm.Rename("sess-123", "New Name")
+	require.NoError(t, err)
+
+	sess, _ := sm.Get("sess-123")
+	assert.Equal(t, "New Name", sess.DisplayName)
+
+	// Test rename non-existent session
+	err = sm.Rename("nonexistent", "Foo")
+	assert.Error(t, err)
+}
