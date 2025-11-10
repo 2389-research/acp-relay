@@ -190,6 +190,34 @@ dot -Tsvg docs/architecture.dot -o docs/architecture.svg
 - [Container Specification](container-spec.md) - Container mode details
 - [README](../README.md) - Project overview and quick start
 
+## Production Considerations
+
+### Performance
+
+- Connection pooling: Up to 100 concurrent sessions (configurable)
+- Database: SQLite with WAL mode for concurrent writes
+- Memory: ~512MB per container (configurable)
+
+### Scaling
+
+- Horizontal: Run multiple relay instances behind load balancer
+- Vertical: Increase max_concurrent_sessions in config
+- Database: Consider PostgreSQL for high-volume deployments
+
+### Security
+
+- Management API bound to localhost only
+- Container mode isolates agent processes
+- Environment variable filtering prevents leakage
+- Regular security audits recommended
+
+### Monitoring
+
+- Health endpoint for load balancer checks
+- Database logs all messages for debugging
+- Structured logging with --verbose flag
+- Consider Prometheus exporter for metrics
+
 ## Contributing
 
 When modifying the architecture:
