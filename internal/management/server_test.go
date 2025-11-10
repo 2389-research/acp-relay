@@ -20,7 +20,7 @@ func TestHealthEndpoint(t *testing.T) {
 		AgentCommand: cfg.Agent.Command,
 	}, nil) // nil db for test
 
-	srv := NewServer(cfg, mgr)
+	srv := NewServer(cfg, mgr, nil) // nil db for unit test
 
 	req := httptest.NewRequest("GET", "/api/health", nil)
 	rec := httptest.NewRecorder()
@@ -54,7 +54,7 @@ func TestConfigEndpoint(t *testing.T) {
 		AgentCommand: cfg.Agent.Command,
 	}, nil) // nil db for test
 
-	srv := NewServer(cfg, mgr)
+	srv := NewServer(cfg, mgr, nil) // nil db for unit test
 
 	req := httptest.NewRequest("GET", "/api/config", nil)
 	rec := httptest.NewRecorder()
