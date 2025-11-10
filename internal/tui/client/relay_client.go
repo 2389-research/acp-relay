@@ -3,6 +3,7 @@
 package client
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -36,7 +37,16 @@ func (c *RelayClient) Connect() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	conn, _, err := websocket.DefaultDialer.Dial(c.url, nil)
+	// Prevent double connection
+	if c.conn != nil && !c.closed {
+		return fmt.Errorf("already connected")
+	}
+
+	// Add 30-second connection timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.DefaultDialer.DialContext(ctx, c.url, nil)
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}
@@ -164,6 +174,8 @@ func (c *RelayClient) WaitForMessage() func() tea.Msg {
 			return RelayMessageMsg{Data: msg}
 		case err := <-c.errors:
 			return RelayErrorMsg{Err: err}
+		case <-c.done:
+			return RelayDisconnectedMsg{}
 		}
 	}
 }
