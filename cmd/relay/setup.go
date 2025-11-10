@@ -1,4 +1,4 @@
-// ABOUTME: Interactive setup command for first-time configuration
+// ABOUTME: Automated setup command for first-time configuration
 // ABOUTME: Guides users through runtime detection and config generation
 
 package main
@@ -13,7 +13,7 @@ import (
 )
 
 func runSetup() {
-	fmt.Println("🚀 ACP-Relay Interactive Setup")
+	fmt.Println("🚀 ACP-Relay Automated Setup")
 	fmt.Println()
 
 	// Detect container runtime
@@ -28,6 +28,7 @@ func runSetup() {
 	}
 
 	fmt.Printf("✅ Found: %s at %s\n", best.Name, best.SocketPath)
+	fmt.Println("   (Auto-selected. To use a different runtime, edit config.yaml after setup)")
 	fmt.Println()
 
 	// Get config directory
@@ -61,11 +62,13 @@ server:
   management_host: "127.0.0.1"  # localhost only for security
 
 agent:
-  command: "/usr/local/bin/acp-agent"  # CHANGE THIS to your agent path
-  mode: "container"
+  mode: "container"  # container mode (command field not used)
 
   env:
     ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+
+  startup_timeout_seconds: 10
+  max_concurrent_sessions: 100
 
   container:
     image: "acp-relay-agent:latest"
@@ -91,10 +94,9 @@ database:
 	fmt.Printf("✅ Config generated at: %s\n", configPath)
 	fmt.Println()
 	fmt.Println("📝 Next steps:")
-	fmt.Println("   1. Edit config and set agent.command to your ACP agent binary path")
-	fmt.Println("   2. Set ANTHROPIC_API_KEY environment variable")
-	fmt.Println("   3. Build Docker image: docker build -t acp-relay-agent:latest .")
-	fmt.Println("   4. Start server: acp-relay serve --config", configPath)
+	fmt.Println("   1. Set ANTHROPIC_API_KEY environment variable")
+	fmt.Println("   2. Build Docker image: docker build -t acp-relay-agent:latest .")
+	fmt.Println("   3. Start server: acp-relay serve --config", configPath)
 	fmt.Println()
 	fmt.Println("🎉 Setup complete!")
 }
