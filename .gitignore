@@ -25,3 +25,7 @@ output.txt
 # Generated architecture diagrams
 docs/architecture.png
 docs/architecture.svg
+
+# Test coverage files
+coverage.out
+coverage.html
