@@ -1,18 +1,20 @@
+# Test configuration for integration tests
+
 server:
-  http_port: 8080
+  http_port: 18080
   http_host: "127.0.0.1"
-  websocket_port: 8081
+  websocket_port: 18081
   websocket_host: "127.0.0.1"
-  management_port: 8082
+  management_port: 18082
   management_host: "127.0.0.1"
 
 agent:
-  command: "/Users/harper/workspace/2389/acp-relay/tests/test_agent.sh"
+  command: "/bin/cat"  # Simple test agent that echoes JSON
+  mode: "process"
   args: []
   env: {}
-  startup_timeout_seconds: 10
-  max_concurrent_sessions: 100
+  startup_timeout_seconds: 5
+  max_concurrent_sessions: 10
 
-logging:
-  level: "info"
-  format: "json"
+database:
+  path: ":memory:"  # Use in-memory SQLite for tests

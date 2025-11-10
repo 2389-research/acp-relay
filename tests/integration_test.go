@@ -41,7 +41,7 @@ func TestFullHTTPFlow(t *testing.T) {
 
 	// Test 1: Health check endpoint
 	t.Run("health_check", func(t *testing.T) {
-		resp, err := http.Get("http://127.0.0.1:8082/api/health")
+		resp, err := http.Get("http://127.0.0.1:18082/api/health")
 		if err != nil {
 			t.Fatalf("failed to check health: %v", err)
 		}
@@ -76,7 +76,7 @@ func TestFullHTTPFlow(t *testing.T) {
 		}
 
 		body, _ := json.Marshal(sessionReq)
-		resp, err := http.Post("http://127.0.0.1:8080/session/new", "application/json", bytes.NewReader(body))
+		resp, err := http.Post("http://127.0.0.1:18080/session/new", "application/json", bytes.NewReader(body))
 		if err != nil {
 			t.Fatalf("failed to create session: %v", err)
 		}
@@ -131,7 +131,7 @@ func TestFullHTTPFlow(t *testing.T) {
 		}
 
 		body, _ := json.Marshal(promptReq)
-		resp, err := http.Post("http://127.0.0.1:8080/session/prompt", "application/json", bytes.NewReader(body))
+		resp, err := http.Post("http://127.0.0.1:18080/session/prompt", "application/json", bytes.NewReader(body))
 		if err != nil {
 			t.Fatalf("failed to send prompt: %v", err)
 		}
