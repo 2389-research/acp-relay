@@ -6,38 +6,74 @@ package tests
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/harper/acp-relay/internal/config"
+	"github.com/harper/acp-relay/internal/db"
+	httpserver "github.com/harper/acp-relay/internal/http"
+	mgmtserver "github.com/harper/acp-relay/internal/management"
+	"github.com/harper/acp-relay/internal/session"
+	wsserver "github.com/harper/acp-relay/internal/websocket"
 )
 
-func TestFullHTTPFlow(t *testing.T) {
-	// Get absolute path to project root
-	projectRoot, err := filepath.Abs("..")
+func startTestServer(t *testing.T, cfg *config.Config) (cleanup func()) {
+	// Open database
+	database, err := db.Open(cfg.Database.Path)
 	if err != nil {
-		t.Fatalf("failed to get project root: %v", err)
+		t.Fatalf("failed to open test database: %v", err)
 	}
 
-	// Start relay server
-	cmd := exec.Command("go", "run", filepath.Join(projectRoot, "cmd/relay/main.go"), "--config", filepath.Join(projectRoot, "tests/test_config.yaml"))
-	cmd.Dir = projectRoot
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	// Create session manager
+	sessionMgr := session.NewManager(session.ManagerConfig{
+		Mode:            cfg.Agent.Mode,
+		AgentCommand:    cfg.Agent.Command,
+		AgentArgs:       cfg.Agent.Args,
+		AgentEnv:        cfg.Agent.Env,
+		ContainerConfig: cfg.Agent.Container,
+	}, database)
 
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("failed to start relay: %v", err)
+	// Create servers
+	httpSrv := httpserver.NewServer(sessionMgr)
+	wsSrv := wsserver.NewServer(sessionMgr)
+	mgmtSrv := mgmtserver.NewServer(cfg, sessionMgr, database)
+
+	// Start servers in goroutines
+	httpListener, _ := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Server.HTTPHost, cfg.Server.HTTPPort))
+	wsListener, _ := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Server.WebSocketHost, cfg.Server.WebSocketPort))
+	mgmtListener, _ := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Server.ManagementHost, cfg.Server.ManagementPort))
+
+	go http.Serve(httpListener, httpSrv)
+	go http.Serve(wsListener, wsSrv)
+	go http.Serve(mgmtListener, mgmtSrv)
+
+	// Wait for servers to be ready
+	time.Sleep(100 * time.Millisecond)
+
+	return func() {
+		httpListener.Close()
+		wsListener.Close()
+		mgmtListener.Close()
+		database.Close()
 	}
-	defer func() {
-		if cmd.Process != nil {
-			cmd.Process.Kill()
-		}
-	}()
+}
 
-	// Wait for server to start
-	time.Sleep(3 * time.Second)
+func TestFullHTTPFlow(t *testing.T) {
+	// Load test config
+	cfg, err := config.Load("test_config.yaml")
+	if err != nil {
+		t.Fatalf("failed to load test config: %v", err)
+	}
+
+	// Start test server
+	cleanup := startTestServer(t, cfg)
+	defer cleanup()
+
+	// Wait a bit for server to be ready
+	time.Sleep(200 * time.Millisecond)
 
 	// Test 1: Health check endpoint
 	t.Run("health_check", func(t *testing.T) {
