@@ -184,15 +184,30 @@ curl -X POST http://localhost:8080/session/new \
   }'
 ```
 
-## API Documentation
+## Documentation
 
-See [docs/api.md](docs/api.md) for complete API documentation including:
+### For App Developers
 
-- HTTP API endpoints
-- WebSocket protocol
-- Management API
-- Request/response examples
-- Error handling
+**New to ACP-relay?** Start here:
+- **[App Integration Guide](docs/APP-INTEGRATION.md)** - Build apps that use acp-relay
+  - Quick start examples
+  - HTTP and WebSocket integration
+  - Common patterns and best practices
+  - Real-world examples in Python, JavaScript, and more
+
+### API Reference
+
+- **[API Documentation](docs/api.md)** - Complete technical reference
+  - HTTP API endpoints
+  - WebSocket protocol
+  - Management API
+  - Request/response examples
+  - Error handling
+
+### Operations
+
+- **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment
+- **[Architecture](docs/ARCHITECTURE.md)** - System design and components
 
 ## Development
 
