@@ -9,13 +9,13 @@ import (
 	"strings"
 )
 
-// ConfigHome returns ~/.config or respects XDG_CONFIG_HOME
+// ConfigHome returns ~/.config/acp-relay or respects XDG_CONFIG_HOME
 func ConfigHome() string {
 	if xdgConfig := os.Getenv("XDG_CONFIG_HOME"); xdgConfig != "" {
-		return xdgConfig
+		return filepath.Join(xdgConfig, "acp-relay")
 	}
 	home := getHome()
-	return filepath.Join(home, ".config")
+	return filepath.Join(home, ".config", "acp-relay")
 }
 
 // DataHome returns ~/.local/share/acp-relay

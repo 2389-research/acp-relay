@@ -106,7 +106,7 @@ func Load(configPath string) (*Config, error) {
 
 	// Determine config file location
 	if configPath == "" {
-		configPath = filepath.Join(xdg.ConfigHome(), "acp-tui", "config.yaml")
+		configPath = filepath.Join(xdg.ConfigHome(), "config.yaml")
 	}
 
 	// If file doesn't exist, create it with defaults
@@ -147,6 +147,63 @@ func (c *Config) Validate() {
 	}
 	if c.UI.ChatHistoryLimit > 10000 {
 		c.UI.ChatHistoryLimit = 10000
+	}
+
+	// Clamp reconnect attempts
+	if c.Relay.ReconnectAttempts < 1 {
+		c.Relay.ReconnectAttempts = 1
+	}
+	if c.Relay.ReconnectAttempts > 10 {
+		c.Relay.ReconnectAttempts = 10
+	}
+
+	// Clamp timeout seconds
+	if c.Relay.TimeoutSeconds < 5 {
+		c.Relay.TimeoutSeconds = 5
+	}
+	if c.Relay.TimeoutSeconds > 300 {
+		c.Relay.TimeoutSeconds = 300
+	}
+
+	// Validate multiline heights
+	if c.Input.MultilineMinHeight < 1 {
+		c.Input.MultilineMinHeight = 1
+	}
+	if c.Input.MultilineMaxHeight < 1 {
+		c.Input.MultilineMaxHeight = 1
+	}
+	// Ensure min <= max after both are clamped
+	if c.Input.MultilineMinHeight > c.Input.MultilineMaxHeight {
+		c.Input.MultilineMinHeight = c.Input.MultilineMaxHeight
+	}
+
+	// Validate keybindings are non-empty
+	if c.Keybindings.ToggleSidebar == "" {
+		c.Keybindings.ToggleSidebar = "ctrl+b"
+	}
+	if c.Keybindings.NewSession == "" {
+		c.Keybindings.NewSession = "n"
+	}
+	if c.Keybindings.DeleteSession == "" {
+		c.Keybindings.DeleteSession = "d"
+	}
+	if c.Keybindings.RenameSession == "" {
+		c.Keybindings.RenameSession = "r"
+	}
+	if c.Keybindings.SendMessage == "" {
+		c.Keybindings.SendMessage = "ctrl+s"
+	}
+	if c.Keybindings.Quit == "" {
+		c.Keybindings.Quit = "ctrl+c"
+	}
+	if c.Keybindings.Help == "" {
+		c.Keybindings.Help = "?"
+	}
+
+	// Validate log level
+	validLevels := map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
+	if !validLevels[c.Logging.Level] {
+		c.Logging.Level = "info"
 	}
 
 	// Expand ~ in paths
