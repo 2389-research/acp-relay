@@ -4,15 +4,19 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/harper/acp-relay/internal/tui/config"
 )
 
 type Model struct {
+	config *config.Config
 	width  int
 	height int
 }
 
-func NewModel() Model {
-	return Model{}
+func NewModel(cfg *config.Config) Model {
+	return Model{
+		config: cfg,
+	}
 }
 
 func (m Model) Init() tea.Cmd {

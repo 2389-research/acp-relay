@@ -9,10 +9,13 @@ import (
 	"strings"
 )
 
-// ConfigHome returns ~/.config/acp-relay
+// ConfigHome returns ~/.config or respects XDG_CONFIG_HOME
 func ConfigHome() string {
+	if xdgConfig := os.Getenv("XDG_CONFIG_HOME"); xdgConfig != "" {
+		return xdgConfig
+	}
 	home := getHome()
-	return filepath.Join(home, ".config", "acp-relay")
+	return filepath.Join(home, ".config")
 }
 
 // DataHome returns ~/.local/share/acp-relay
@@ -27,8 +30,13 @@ func CacheHome() string {
 	return filepath.Join(home, ".cache", "acp-relay")
 }
 
-// ExpandPath expands $XDG_* variables in config paths
+// ExpandPath expands $XDG_* variables and ~ in config paths
 func ExpandPath(path string) string {
+	// Expand tilde
+	if strings.HasPrefix(path, "~/") {
+		return filepath.Join(getHome(), path[2:])
+	}
+
 	// CRITICAL: Use strings.HasPrefix, not filepath.HasPrefix (Error #3 fix)
 	if strings.HasPrefix(path, "$XDG_DATA_HOME") {
 		return strings.Replace(path, "$XDG_DATA_HOME", DataHome(), 1)

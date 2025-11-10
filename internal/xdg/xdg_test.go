@@ -16,10 +16,30 @@ func TestConfigHome(t *testing.T) {
 	}
 
 	got := ConfigHome()
-	want := filepath.Join(home, ".config", "acp-relay")
+	want := filepath.Join(home, ".config")
 
 	if got != want {
 		t.Errorf("ConfigHome() = %q, want %q", got, want)
+	}
+}
+
+func TestConfigHome_WithEnv(t *testing.T) {
+	// Test XDG_CONFIG_HOME environment variable
+	oldXDG := os.Getenv("XDG_CONFIG_HOME")
+	defer func() {
+		if oldXDG != "" {
+			os.Setenv("XDG_CONFIG_HOME", oldXDG)
+		} else {
+			os.Unsetenv("XDG_CONFIG_HOME")
+		}
+	}()
+
+	testPath := "/tmp/custom-config"
+	os.Setenv("XDG_CONFIG_HOME", testPath)
+
+	got := ConfigHome()
+	if got != testPath {
+		t.Errorf("ConfigHome() with XDG_CONFIG_HOME = %q, want %q", got, testPath)
 	}
 }
 
