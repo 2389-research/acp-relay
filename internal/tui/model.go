@@ -5,10 +5,12 @@ package tui
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/harper/acp-relay/internal/tui/config"
+	"github.com/harper/acp-relay/internal/tui/theme"
 )
 
 type Model struct {
 	config *config.Config
+	theme  theme.Theme
 	width  int
 	height int
 }
@@ -16,6 +18,7 @@ type Model struct {
 func NewModel(cfg *config.Config) Model {
 	return Model{
 		config: cfg,
+		theme:  theme.GetTheme(cfg.UI.Theme, nil),
 	}
 }
 
