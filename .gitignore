@@ -2,6 +2,7 @@
 /acp-relay
 /relay
 /main
+/bin/
 
 # Databases
 *.db

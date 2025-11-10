@@ -1,7 +1,7 @@
 # ABOUTME: Makefile for building and managing the ACP relay server
 # ABOUTME: Provides targets for building, testing, and running the relay
 
-.PHONY: build test clean run help
+.PHONY: build test clean run help build-tui install-tui clean-tui test-tui dev-tui
 
 # Build the relay server
 build:
@@ -50,6 +50,29 @@ lint:
 	@echo "Running linter..."
 	@golangci-lint run ./... || echo "Note: Install golangci-lint for linting"
 
+# Build the TUI client
+build-tui:
+	go build -o bin/acp-tui ./cmd/tui
+
+# Install TUI client
+install-tui: build-tui
+	install -m 755 bin/acp-tui /usr/local/bin/
+
+# Clean TUI artifacts
+clean-tui:
+	rm -f bin/acp-tui
+
+# Test TUI code
+test-tui:
+	go test ./internal/tui/... -v -cover
+
+# Build and run TUI
+dev-tui: build-tui
+	./bin/acp-tui
+
+# Build both relay and TUI
+build-all: build build-tui
+
 # Show help
 help:
 	@echo "ACP Relay - Available targets:"
@@ -64,3 +87,11 @@ help:
 	@echo "  make fmt         - Format Go code"
 	@echo "  make lint        - Run linter (requires golangci-lint)"
 	@echo "  make help        - Show this help message"
+	@echo ""
+	@echo "TUI targets:"
+	@echo "  make build-tui   - Build the TUI client"
+	@echo "  make install-tui - Install TUI client to /usr/local/bin/"
+	@echo "  make clean-tui   - Remove TUI build artifacts"
+	@echo "  make test-tui    - Run TUI tests"
+	@echo "  make dev-tui     - Build and run TUI"
+	@echo "  make build-all   - Build both relay and TUI"
