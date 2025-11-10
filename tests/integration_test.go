@@ -42,9 +42,23 @@ func startTestServer(t *testing.T, cfg *config.Config) (cleanup func()) {
 	mgmtSrv := mgmtserver.NewServer(cfg, sessionMgr, database)
 
 	// Start servers in goroutines
-	httpListener, _ := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Server.HTTPHost, cfg.Server.HTTPPort))
-	wsListener, _ := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Server.WebSocketHost, cfg.Server.WebSocketPort))
-	mgmtListener, _ := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Server.ManagementHost, cfg.Server.ManagementPort))
+	httpListener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Server.HTTPHost, cfg.Server.HTTPPort))
+	if err != nil {
+		t.Fatalf("failed to start HTTP listener on %s:%d: %v", cfg.Server.HTTPHost, cfg.Server.HTTPPort, err)
+	}
+
+	wsListener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Server.WebSocketHost, cfg.Server.WebSocketPort))
+	if err != nil {
+		httpListener.Close()
+		t.Fatalf("failed to start WebSocket listener on %s:%d: %v", cfg.Server.WebSocketHost, cfg.Server.WebSocketPort, err)
+	}
+
+	mgmtListener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Server.ManagementHost, cfg.Server.ManagementPort))
+	if err != nil {
+		httpListener.Close()
+		wsListener.Close()
+		t.Fatalf("failed to start management listener on %s:%d: %v", cfg.Server.ManagementHost, cfg.Server.ManagementPort, err)
+	}
 
 	go http.Serve(httpListener, httpSrv)
 	go http.Serve(wsListener, wsSrv)
