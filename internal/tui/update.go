@@ -257,6 +257,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.waitForRelayMessage()
 		}
 
+		// Track whether this message was handled
+		handled := false
+
 		// Check if this is a response (has result/error) or notification (has method)
 		//nolint:nestif // message routing requires nested checks for different response types
 		if method, hasMethod := response["method"].(string); hasMethod {
@@ -267,6 +270,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch method {
 			case "session/chunk":
 				// Agent is streaming a response chunk
+				handled = true
 				if m.activeSessionID != "" {
 					if content, ok := params["content"].(string); ok {
 						// Accumulate response for typing indicator
@@ -282,6 +286,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case "session/complete":
 				// Agent finished responding
+				handled = true
 				DebugLog("Update: session/complete received")
 
 				// Stop typing indicator (adds final message)
@@ -293,6 +298,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case "session/update":
 				// Session status update (available_commands, tool_use, thinking, thought_chunk)
+				handled = true
 				DebugLog("Update: session/update received")
 
 				// Extract the update object
@@ -400,6 +406,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case "session/request_permission":
 				// Agent requesting permission to use a tool
+				handled = true
 				DebugLog("Update: session/request_permission received")
 
 				// Extract request ID for response
@@ -471,20 +478,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			default:
-				// Unknown notification - log it
-				if m.activeSessionID != "" {
-					sysMsg := &client.Message{
-						SessionID: m.activeSessionID,
-						Type:      client.MessageTypeSystem,
-						Content:   fmt.Sprintf("[%s] %s", method, string(msg.Data)),
-						Timestamp: time.Now(),
-					}
-					m.messageStore.AddMessage(sysMsg)
-					m = m.updateChatView()
-				}
+				// Unknown notification - will be handled as unhandled below
+				// Don't set handled = true for unknown methods
 			}
 		} else if result, hasResult := response["result"]; hasResult {
 			// This is a successful response
+			handled = true
 			DebugLog("Update: RelayMessageMsg - response with result")
 
 			// Check if it's a session/new response
@@ -532,6 +531,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		} else if errorData, hasError := response["error"]; hasError {
 			// This is an error response
+			handled = true
 			DebugLog("Update: RelayMessageMsg - response with error: %v", errorData)
 
 			if errorMap, ok := errorData.(map[string]interface{}); ok {
@@ -547,6 +547,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m = m.updateChatView()
 				}
 			}
+		}
+
+		// If message was not handled and debug mode is enabled, create unhandled message
+		if !handled && m.debugMode && m.activeSessionID != "" {
+			m = m.handleUnhandledMessage(msg.Data, response)
 		}
 
 		// Continue listening for more messages
@@ -1069,4 +1074,51 @@ func convertScreensMessage(msg tea.Msg) tea.Msg {
 		// Pass through other messages (like tea.QuitMsg)
 		return msg
 	}
+}
+
+// handleUnhandledMessage creates and stores an unhandled message for debug display.
+func (m Model) handleUnhandledMessage(rawData []byte, response map[string]interface{}) Model {
+	DebugLog("Update: Unhandled message detected: %s", string(rawData))
+
+	// Determine message type/content for display
+	messageType := extractMessageType(response)
+
+	// Format JSON with indentation for readability
+	formattedJSON := formatJSONForDisplay(rawData)
+
+	// Create unhandled message
+	unhandledMsg := &client.Message{
+		SessionID: m.activeSessionID,
+		Type:      client.MessageTypeUnhandled,
+		Content:   messageType,
+		RawJSON:   formattedJSON,
+		Timestamp: time.Now(),
+	}
+	m.messageStore.AddMessage(unhandledMsg)
+	m = m.updateChatView()
+	DebugLog("Update: Added unhandled message to store: type=%s", messageType)
+
+	return m
+}
+
+// extractMessageType extracts the message type from a JSON-RPC response.
+func extractMessageType(response map[string]interface{}) string {
+	if method, ok := response["method"].(string); ok {
+		return method
+	}
+	if id, ok := response["id"]; ok {
+		return fmt.Sprintf("id: %v", id)
+	}
+	return "unknown"
+}
+
+// formatJSONForDisplay formats JSON with indentation for readability.
+func formatJSONForDisplay(rawData []byte) string {
+	var jsonData map[string]interface{}
+	if err := json.Unmarshal(rawData, &jsonData); err == nil {
+		if formatted, err := json.MarshalIndent(jsonData, "  ", "  "); err == nil {
+			return string(formatted)
+		}
+	}
+	return string(rawData)
 }

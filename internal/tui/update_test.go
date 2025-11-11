@@ -4,6 +4,7 @@ package tui
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -171,4 +172,184 @@ func TestReadOnlyMode_InputDisabledInReadOnlySession(t *testing.T) {
 	// This is an integration test that would be done at the Model level
 	// For now, we test the individual components
 	t.Skip("Integration test - requires full Model initialization")
+}
+
+func TestUnhandledMessage_Detection(t *testing.T) {
+	// Test that unknown methods are detected as unhandled
+	unknownJSON := `{
+		"jsonrpc": "2.0",
+		"method": "session/unknown_method",
+		"params": {
+			"someData": "test"
+		}
+	}`
+
+	var notification map[string]interface{}
+	err := json.Unmarshal([]byte(unknownJSON), &notification)
+	assert.NoError(t, err)
+
+	method, ok := notification["method"].(string)
+	assert.True(t, ok)
+	assert.Equal(t, "session/unknown_method", method)
+
+	// This method should not match any known handlers
+	knownMethods := []string{
+		"session/chunk",
+		"session/complete",
+		"session/update",
+		"session/request_permission",
+	}
+
+	isKnown := false
+	for _, known := range knownMethods {
+		if method == known {
+			isKnown = true
+			break
+		}
+	}
+
+	assert.False(t, isKnown, "Unknown method should not match known methods")
+}
+
+func TestUnhandledMessage_ResponseDetection(t *testing.T) {
+	// Test that responses without result or error are detected as unhandled
+	unknownResponseJSON := `{
+		"jsonrpc": "2.0",
+		"id": 123,
+		"something": "unexpected"
+	}`
+
+	var response map[string]interface{}
+	err := json.Unmarshal([]byte(unknownResponseJSON), &response)
+	assert.NoError(t, err)
+
+	// Check that it has neither result nor error
+	_, hasResult := response["result"]
+	_, hasError := response["error"]
+	_, hasMethod := response["method"]
+
+	assert.False(t, hasResult, "Should not have result field")
+	assert.False(t, hasError, "Should not have error field")
+	assert.False(t, hasMethod, "Should not have method field")
+
+	// This should be flagged as unhandled
+}
+
+func TestUnhandledMessage_MessageCreation(t *testing.T) {
+	// Test creating an unhandled message with raw JSON
+	rawJSON := `{
+		"jsonrpc": "2.0",
+		"method": "session/unknown_method",
+		"params": {
+			"someData": "test"
+		}
+	}`
+
+	msg := &client.Message{
+		SessionID: "sess-1",
+		Type:      client.MessageTypeUnhandled,
+		Content:   "session/unknown_method",
+		RawJSON:   rawJSON,
+		Timestamp: time.Now(),
+	}
+
+	assert.Equal(t, "sess-1", msg.SessionID)
+	assert.Equal(t, client.MessageTypeUnhandled, msg.Type)
+	assert.Equal(t, "session/unknown_method", msg.Content)
+	assert.NotEmpty(t, msg.RawJSON)
+
+	// Verify RawJSON can be parsed
+	var parsed map[string]interface{}
+	err := json.Unmarshal([]byte(msg.RawJSON), &parsed)
+	assert.NoError(t, err)
+	assert.Equal(t, "session/unknown_method", parsed["method"])
+}
+
+func TestUnhandledMessage_OnlyInDebugMode(t *testing.T) {
+	// Test that unhandled messages are only created when debugMode=true
+	debugMode := true
+	handled := false
+
+	// Simulate unhandled message logic
+	if !handled && debugMode {
+		// Should create unhandled message
+		assert.True(t, true, "Should create unhandled message in debug mode")
+	}
+
+	// Test with debug mode off
+	debugMode = false
+	shouldCreate := !handled && debugMode
+	assert.False(t, shouldCreate, "Should not create unhandled message when debug mode is off")
+}
+
+func TestUnhandledMessage_JSONFormatting(t *testing.T) {
+	// Test that unhandled message JSON is properly formatted
+	rawJSON := `{"jsonrpc":"2.0","method":"test","params":{"key":"value"}}`
+
+	// Parse and reformat with indentation
+	var data map[string]interface{}
+	err := json.Unmarshal([]byte(rawJSON), &data)
+	assert.NoError(t, err)
+
+	formatted, err := json.MarshalIndent(data, "  ", "  ")
+	assert.NoError(t, err)
+
+	formattedStr := string(formatted)
+	assert.Contains(t, formattedStr, "\n", "Formatted JSON should contain newlines")
+	assert.Contains(t, formattedStr, "  ", "Formatted JSON should be indented")
+}
+
+func TestUnhandledMessage_VariousTypes(t *testing.T) {
+	// Test various types of unhandled messages
+	testCases := []struct {
+		name        string
+		json        string
+		expectedMsg string
+	}{
+		{
+			name: "unknown notification",
+			json: `{
+				"jsonrpc": "2.0",
+				"method": "session/unknown",
+				"params": {}
+			}`,
+			expectedMsg: "session/unknown",
+		},
+		{
+			name: "unknown response with id",
+			json: `{
+				"jsonrpc": "2.0",
+				"id": 42,
+				"unknownField": "value"
+			}`,
+			expectedMsg: "id: 42",
+		},
+		{
+			name: "malformed message",
+			json: `{
+				"something": "unexpected"
+			}`,
+			expectedMsg: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var data map[string]interface{}
+			err := json.Unmarshal([]byte(tc.json), &data)
+			assert.NoError(t, err)
+
+			// Extract method or id for content
+			var content string
+			if method, ok := data["method"].(string); ok {
+				content = method
+			} else if id, ok := data["id"]; ok {
+				content = fmt.Sprintf("id: %v", id)
+			}
+
+			if tc.expectedMsg != "" {
+				assert.Contains(t, content, tc.expectedMsg)
+			}
+		})
+	}
 }

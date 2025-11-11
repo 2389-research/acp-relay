@@ -64,8 +64,8 @@ func main() {
 		}
 	}
 
-	// Create initial model
-	m := tui.NewModel(cfg)
+	// Create initial model with debug flag
+	m := tui.NewModel(cfg, *debug)
 
 	// Create Bubbletea program
 	p := tea.NewProgram(m, tea.WithAltScreen())

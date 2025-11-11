@@ -21,6 +21,7 @@ const (
 	MessageTypeToolUse
 	MessageTypeThinking
 	MessageTypeThoughtChunk
+	MessageTypeUnhandled
 )
 
 func (mt MessageType) String() string {
@@ -47,6 +48,8 @@ func (mt MessageType) String() string {
 		return "Thinking"
 	case MessageTypeThoughtChunk:
 		return "ThoughtChunk"
+	case MessageTypeUnhandled:
+		return "Unhandled"
 	default:
 		return "Unknown"
 	}
@@ -76,6 +79,8 @@ func (mt MessageType) Icon() string {
 		return "💭"
 	case MessageTypeThoughtChunk:
 		return "💭"
+	case MessageTypeUnhandled:
+		return "⚠️"
 	default:
 		return "❓"
 	}
@@ -97,6 +102,7 @@ type Message struct {
 	Commands   []Command              // For available commands updates
 	ToolName   string                 // For tool use messages
 	Thought    string                 // For thought chunk messages
+	RawJSON    string                 // For unhandled messages - full JSON payload
 }
 
 type MessageStore struct {

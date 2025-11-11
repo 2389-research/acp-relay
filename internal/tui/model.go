@@ -47,11 +47,12 @@ type Model struct {
 	activeSessionID string
 	sidebarVisible  bool
 	readOnlyMode    bool   // True when viewing a closed session
+	debugMode       bool   // True when debug mode is enabled (shows unhandled messages)
 	currentThought  string // Accumulates agent_thought_chunk content
 	currentResponse string // Accumulates session/chunk content for typing indicator
 }
 
-func NewModel(cfg *config.Config) Model {
+func NewModel(cfg *config.Config, debugMode bool) Model {
 	th := theme.GetTheme(cfg.UI.Theme, nil)
 
 	// Initialize components with default dimensions (will be resized on first WindowSizeMsg)
@@ -91,6 +92,7 @@ func NewModel(cfg *config.Config) Model {
 		focusedArea:     FocusInputArea,
 		activeSessionID: "",
 		sidebarVisible:  true,
+		debugMode:       debugMode,
 	}
 
 	// Start with input area focused

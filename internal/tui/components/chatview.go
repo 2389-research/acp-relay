@@ -104,6 +104,11 @@ func (cv *ChatView) formatMessage(msg *client.Message) string {
 		return FormatSystemMessage(msg, cv.theme)
 	}
 
+	// Handle unhandled messages specially
+	if msg.Type == client.MessageTypeUnhandled {
+		return cv.formatUnhandledMessage(msg)
+	}
+
 	// Icon and timestamp
 	icon := msg.Type.Icon()
 	timestamp := msg.Timestamp.Format("[15:04:05]")
@@ -137,6 +142,43 @@ func (cv *ChatView) formatMessage(msg *client.Message) string {
 	content := contentStyle.Render(msg.Content)
 	sb.WriteString(content)
 	sb.WriteString("\n")
+
+	return sb.String()
+}
+
+// formatUnhandledMessage formats an unhandled message with JSON display.
+func (cv *ChatView) formatUnhandledMessage(msg *client.Message) string {
+	var sb strings.Builder
+
+	// Icon and timestamp
+	icon := msg.Type.Icon()
+	timestamp := msg.Timestamp.Format("[15:04:05]")
+	timestampStyled := cv.theme.DimStyle().Render(timestamp)
+
+	// Build header: icon + timestamp + "Unhandled Message"
+	header := fmt.Sprintf("%s %s Unhandled Message:", icon, timestampStyled)
+	warningStyle := cv.theme.ChatViewStyle().Foreground(cv.theme.Warning)
+	sb.WriteString(warningStyle.Render(header))
+	sb.WriteString("\n")
+
+	// Show message type (method or id)
+	typeLabel := fmt.Sprintf("Type: %s", msg.Content)
+	sb.WriteString(warningStyle.Render(typeLabel))
+	sb.WriteString("\n")
+
+	// Show formatted JSON with monospace style
+	if msg.RawJSON != "" {
+		monospaceStyle := lipgloss.NewStyle().
+			Foreground(cv.theme.Warning).
+			Faint(true)
+
+		// Add indentation to each line of JSON
+		lines := strings.Split(msg.RawJSON, "\n")
+		for _, line := range lines {
+			sb.WriteString(monospaceStyle.Render("  " + line))
+			sb.WriteString("\n")
+		}
+	}
 
 	return sb.String()
 }

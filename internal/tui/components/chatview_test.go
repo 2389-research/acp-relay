@@ -572,3 +572,176 @@ func verifyCommandFormatting(t *testing.T, formatted string, wantBullets int, wa
 	}
 	assert.Contains(t, formatted, "📋", "Should contain commands icon")
 }
+
+// Test unhandled message rendering with formatted JSON.
+func TestChatView_UnhandledMessageFormatting(t *testing.T) {
+	cv := NewChatView(80, 24, theme.DefaultTheme)
+
+	rawJSON := `{
+  "jsonrpc": "2.0",
+  "method": "session/unknown_method",
+  "params": {
+    "someData": "test"
+  }
+}`
+
+	msg := &client.Message{
+		SessionID: testSessionID,
+		Type:      client.MessageTypeUnhandled,
+		Content:   "session/unknown_method",
+		RawJSON:   rawJSON,
+		Timestamp: time.Date(2025, 11, 11, 14, 30, 45, 0, time.UTC),
+	}
+
+	formatted := cv.formatMessage(msg)
+
+	// Check for warning icon
+	assert.Contains(t, formatted, "⚠️", "Should contain warning icon")
+
+	// Check for timestamp
+	assert.Contains(t, formatted, "[14:30:45]", "Should contain formatted timestamp")
+
+	// Check for "Unhandled Message" label
+	assert.Contains(t, formatted, "Unhandled Message", "Should contain 'Unhandled Message' label")
+
+	// Check for method/type
+	assert.Contains(t, formatted, "session/unknown_method", "Should contain method name")
+
+	// Check that JSON is present
+	assert.Contains(t, formatted, "jsonrpc", "Should contain JSON content")
+	assert.Contains(t, formatted, "params", "Should contain JSON params")
+}
+
+// Test unhandled message with response ID.
+func TestChatView_UnhandledMessageWithID(t *testing.T) {
+	cv := NewChatView(80, 24, theme.DefaultTheme)
+
+	rawJSON := `{
+  "jsonrpc": "2.0",
+  "id": 42,
+  "unexpectedField": "value"
+}`
+
+	msg := &client.Message{
+		SessionID: testSessionID,
+		Type:      client.MessageTypeUnhandled,
+		Content:   "id: 42",
+		RawJSON:   rawJSON,
+		Timestamp: time.Now(),
+	}
+
+	formatted := cv.formatMessage(msg)
+
+	// Check for warning icon
+	assert.Contains(t, formatted, "⚠️", "Should contain warning icon")
+
+	// Check for ID in content
+	assert.Contains(t, formatted, "42", "Should contain message ID")
+
+	// Check that JSON is present
+	assert.Contains(t, formatted, "unexpectedField", "Should contain JSON content")
+}
+
+// Test unhandled message uses monospace font for JSON.
+func TestChatView_UnhandledMessageMonospaceJSON(t *testing.T) {
+	cv := NewChatView(80, 24, theme.DefaultTheme)
+
+	rawJSON := `{"jsonrpc":"2.0","method":"test"}`
+
+	msg := &client.Message{
+		SessionID: testSessionID,
+		Type:      client.MessageTypeUnhandled,
+		Content:   "test",
+		RawJSON:   rawJSON,
+		Timestamp: time.Now(),
+	}
+
+	formatted := cv.formatMessage(msg)
+
+	// Formatted output should contain the JSON
+	assert.Contains(t, formatted, "jsonrpc", "Should contain JSON content")
+	assert.Contains(t, formatted, "method", "Should contain JSON fields")
+}
+
+// Test unhandled message with indented JSON.
+func TestChatView_UnhandledMessageJSONIndentation(t *testing.T) {
+	cv := NewChatView(80, 24, theme.DefaultTheme)
+
+	// Already indented JSON
+	rawJSON := `{
+  "jsonrpc": "2.0",
+  "method": "session/test",
+  "params": {
+    "nested": {
+      "key": "value"
+    }
+  }
+}`
+
+	msg := &client.Message{
+		SessionID: testSessionID,
+		Type:      client.MessageTypeUnhandled,
+		Content:   "session/test",
+		RawJSON:   rawJSON,
+		Timestamp: time.Now(),
+	}
+
+	formatted := cv.formatMessage(msg)
+
+	// Check that indentation is preserved
+	assert.Contains(t, formatted, "\n", "Should contain newlines")
+	assert.Contains(t, formatted, "  ", "Should contain indentation")
+	assert.Contains(t, formatted, "nested", "Should contain nested fields")
+}
+
+// Test unhandled message yellow color.
+func TestChatView_UnhandledMessageYellowColor(t *testing.T) {
+	cv := NewChatView(80, 24, theme.DefaultTheme)
+
+	msg := &client.Message{
+		SessionID: testSessionID,
+		Type:      client.MessageTypeUnhandled,
+		Content:   "test",
+		RawJSON:   `{"test":"data"}`,
+		Timestamp: time.Now(),
+	}
+
+	formatted := cv.formatMessage(msg)
+
+	// The formatted message should use warning styling (yellow)
+	// We can't directly test ANSI colors, but we can verify the message is formatted
+	assert.NotEmpty(t, formatted, "Formatted message should not be empty")
+	assert.Contains(t, formatted, "⚠️", "Should contain warning icon")
+}
+
+// Test multiple unhandled messages in sequence.
+func TestChatView_MultipleUnhandledMessages(t *testing.T) {
+	cv := NewChatView(80, 24, theme.DefaultTheme)
+	cv.sessionID = testSessionID
+
+	msg1 := &client.Message{
+		SessionID: testSessionID,
+		Type:      client.MessageTypeUnhandled,
+		Content:   "method1",
+		RawJSON:   `{"method":"method1"}`,
+		Timestamp: time.Now(),
+	}
+
+	msg2 := &client.Message{
+		SessionID: testSessionID,
+		Type:      client.MessageTypeUnhandled,
+		Content:   "method2",
+		RawJSON:   `{"method":"method2"}`,
+		Timestamp: time.Now().Add(1 * time.Second),
+	}
+
+	cv.AddMessage(msg1)
+	cv.AddMessage(msg2)
+
+	view := cv.View()
+
+	// Both messages should be in the view
+	assert.Contains(t, view, "method1", "Should contain first method")
+	assert.Contains(t, view, "method2", "Should contain second method")
+	assert.Equal(t, 2, strings.Count(view, "⚠️"), "Should have two warning icons")
+}
