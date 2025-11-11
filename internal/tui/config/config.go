@@ -64,7 +64,7 @@ type LoggingConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Relay: RelayConfig{
-			URL:               "ws://localhost:8081",
+			URL:               "ws://localhost:23891",
 			ReconnectAttempts: 5,
 			TimeoutSeconds:    30,
 		},

@@ -3,9 +3,11 @@
 package tui
 
 import (
+	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/google/uuid"
 	"github.com/harper/acp-relay/internal/tui/client"
 )
 
@@ -212,7 +214,7 @@ func (m Model) handleFocusedInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "enter":
 			m = m.onSessionSelect()
 		case "n":
-			// TODO: Create new session
+			m = m.onCreateSession()
 		case "d":
 			// TODO: Delete session
 		case "r":
@@ -319,5 +321,56 @@ func (m Model) updateChatView() Model {
 
 	messages := m.messageStore.GetMessages(m.activeSessionID)
 	m.chatView.SetMessages(messages)
+	return m
+}
+
+// refreshSidebar updates the sidebar with current session list
+func (m Model) refreshSidebar() Model {
+	sessions := m.sessionManager.List()
+	m.sidebar.SetSessions(sessions)
+	return m
+}
+
+// onCreateSession creates a new session and makes it active
+func (m Model) onCreateSession() Model {
+	// Generate unique session ID
+	sessionID := "sess_" + uuid.New().String()[:8]
+
+	// Use config default working directory
+	workingDir := m.config.Sessions.DefaultWorkingDir
+
+	// Create display name with counter
+	sessions := m.sessionManager.List()
+	displayName := fmt.Sprintf("Session %d", len(sessions)+1)
+
+	// Create the session
+	sess, err := m.sessionManager.Create(sessionID, workingDir, displayName)
+	if err != nil {
+		DebugLog("onCreateSession: Failed to create session: %v", err)
+		return m
+	}
+
+	DebugLog("onCreateSession: Created session %s (%s)", sess.ID, sess.DisplayName)
+
+	// Update sidebar with new session list
+	m = m.refreshSidebar()
+
+	// Make it the active session
+	m.activeSessionID = sess.ID
+	m.statusBar.SetActiveSession(sess.DisplayName)
+
+	// Clear chat view for new session
+	m = m.updateChatView()
+
+	// Add welcome message
+	welcomeMsg := &client.Message{
+		SessionID: sessionID,
+		Type:      client.MessageTypeSystem,
+		Content:   fmt.Sprintf("Session created: %s\nWorking directory: %s", displayName, workingDir),
+		Timestamp: time.Now(),
+	}
+	m.messageStore.AddMessage(welcomeMsg)
+	m = m.updateChatView()
+
 	return m
 }

@@ -14,7 +14,7 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
-	assert.Equal(t, "ws://localhost:8081", cfg.Relay.URL)
+	assert.Equal(t, "ws://localhost:23891", cfg.Relay.URL)
 	assert.Equal(t, 5, cfg.Relay.ReconnectAttempts)
 	assert.Equal(t, "default", cfg.UI.Theme)
 	assert.Equal(t, 25, cfg.UI.SidebarWidth)
