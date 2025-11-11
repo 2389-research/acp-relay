@@ -278,3 +278,77 @@ func TestStatusBar_ProgressBarRendering(t *testing.T) {
 		})
 	}
 }
+
+func TestStatusBar_SetReadOnlyMode(t *testing.T) {
+	sb := NewStatusBar(80, theme.DefaultTheme)
+
+	// Initially not in read-only mode
+	assert.False(t, sb.readOnlyMode)
+
+	// Enable read-only mode
+	sb.SetReadOnlyMode(true)
+	assert.True(t, sb.readOnlyMode)
+
+	// Disable read-only mode
+	sb.SetReadOnlyMode(false)
+	assert.False(t, sb.readOnlyMode)
+}
+
+func TestStatusBar_ReadOnlyModeIndicator(t *testing.T) {
+	sb := NewStatusBar(100, theme.DefaultTheme)
+	sb.SetConnectionStatus("connected")
+
+	// Enable read-only mode
+	sb.SetReadOnlyMode(true)
+
+	view := sb.View()
+
+	// Should show read-only indicator
+	assert.Contains(t, view, "👀")
+	assert.Contains(t, view, "Viewing closed session (read-only)")
+}
+
+func TestStatusBar_ReadOnlyModePriority(t *testing.T) {
+	sb := NewStatusBar(100, theme.DefaultTheme)
+
+	// Set custom status
+	sb.SetStatus("Agent is thinking...")
+
+	// Enable read-only mode (should override custom status)
+	sb.SetReadOnlyMode(true)
+
+	view := sb.View()
+
+	// Should show read-only indicator, not custom status
+	assert.Contains(t, view, "👀")
+	assert.Contains(t, view, "read-only")
+	assert.NotContains(t, view, "Agent is thinking")
+}
+
+func TestStatusBar_ReadOnlyModeWithSessionName(t *testing.T) {
+	sb := NewStatusBar(100, theme.DefaultTheme)
+
+	// Set active session
+	sb.SetActiveSession("abc123 (Read-Only)")
+	sb.SetReadOnlyMode(true)
+
+	view := sb.View()
+
+	// Should show read-only indicator in custom status
+	assert.Contains(t, view, "👀")
+	assert.Contains(t, view, "read-only")
+}
+
+func TestStatusBar_NormalModeDoesNotShowReadOnlyIndicator(t *testing.T) {
+	sb := NewStatusBar(100, theme.DefaultTheme)
+	sb.SetConnectionStatus("connected")
+	sb.SetActiveSession("TestSession")
+
+	// Ensure read-only mode is off
+	sb.SetReadOnlyMode(false)
+
+	view := sb.View()
+
+	// Should NOT show read-only indicator
+	assert.NotContains(t, view, "Viewing closed session (read-only)")
+}

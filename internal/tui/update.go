@@ -110,6 +110,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// If session is closed, load history in read-only mode
 		DebugLog("Update: Session is closed, loading history in read-only mode")
 		m.activeSessionID = msg.Session.ID
+		m.readOnlyMode = true
+
+		// Disable input area
+		m.inputArea.SetDisabled(true)
+
+		// Set status bar to read-only mode
+		m.statusBar.SetReadOnlyMode(true)
 
 		// Load message history from database
 		if m.dbClient != nil {
@@ -124,8 +131,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Update status bar
-		m.statusBar.SetActiveSession(msg.Session.ID[:12] + " (Read-Only)")
+		// Update subtitle with read-only indicator
+		sessionIDShort := msg.Session.ID
+		if len(sessionIDShort) > 12 {
+			sessionIDShort = sessionIDShort[:12]
+		}
+		m.statusBar.SetActiveSession(sessionIDShort + " (Read-Only)")
 
 		// Update chat view
 		m = m.updateChatView()
@@ -580,8 +591,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Resume successful - load history from database
 			DebugLog("Update: SessionResumeResultMsg - resume succeeded for session %s", msg.SessionID)
 
-			// Set as active session
+			// Set as active session (NOT read-only)
 			m.activeSessionID = msg.SessionID
+			m.readOnlyMode = false
+			m.inputArea.SetDisabled(false)
+			m.statusBar.SetReadOnlyMode(false)
 
 			// Find the session in sidebar and update display name
 			sessions := m.sessionManager.List()
@@ -759,7 +773,13 @@ func (m Model) onSessionSelect() Model {
 //
 //nolint:funlen // message sending with protocol handling
 func (m Model) onSendMessage() Model {
-	DebugLog("onSendMessage: Called (activeSessionID=%s, focusedArea=%d)", m.activeSessionID, m.focusedArea)
+	DebugLog("onSendMessage: Called (activeSessionID=%s, focusedArea=%d, readOnlyMode=%v)", m.activeSessionID, m.focusedArea, m.readOnlyMode)
+
+	// Prevent sending messages in read-only mode
+	if m.readOnlyMode {
+		DebugLog("onSendMessage: Read-only mode active, cannot send")
+		return m
+	}
 
 	if m.activeSessionID == "" {
 		DebugLog("onSendMessage: No active session, cannot send")

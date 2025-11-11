@@ -175,3 +175,93 @@ func TestInputArea_ThemeApplication(t *testing.T) {
 		})
 	}
 }
+
+func TestInputArea_SetDisabled(t *testing.T) {
+	ia := NewInputArea(80, 5, theme.DefaultTheme)
+
+	// Initially not disabled
+	assert.False(t, ia.disabled)
+
+	// Disable it
+	ia.SetDisabled(true)
+	assert.True(t, ia.disabled)
+
+	// Enable it again
+	ia.SetDisabled(false)
+	assert.False(t, ia.disabled)
+}
+
+func TestInputArea_DisabledIgnoresInput(t *testing.T) {
+	ia := NewInputArea(80, 5, theme.DefaultTheme)
+	ia.Focus()
+
+	// Disable input area
+	ia.SetDisabled(true)
+
+	// Try to update with key input
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
+	updatedModel, cmd := ia.Update(msg)
+
+	// Should still return the model but input should be ignored
+	assert.NotNil(t, updatedModel)
+	updatedIA, ok := updatedModel.(*InputArea)
+	assert.True(t, ok)
+	assert.NotNil(t, updatedIA)
+
+	// Value should remain empty (input ignored)
+	assert.Equal(t, "", updatedIA.GetValue())
+
+	// Command should be nil (no action taken)
+	assert.Nil(t, cmd)
+}
+
+func TestInputArea_DisabledChangesPlaceholder(t *testing.T) {
+	ia := NewInputArea(80, 5, theme.DefaultTheme)
+
+	// Disable it
+	ia.SetDisabled(true)
+
+	// View should contain read-only placeholder
+	view := ia.View()
+	assert.Contains(t, view, "Session is closed (read-only)")
+}
+
+func TestInputArea_DisabledDimAppearance(t *testing.T) {
+	ia := NewInputArea(80, 5, theme.DefaultTheme)
+
+	// Normal view
+	normalView := ia.View()
+
+	// Disabled view
+	ia.SetDisabled(true)
+	disabledView := ia.View()
+
+	// Both should render (content will differ)
+	assert.NotEmpty(t, normalView)
+	assert.NotEmpty(t, disabledView)
+	// Disabled view should be different from normal view
+	assert.NotEqual(t, normalView, disabledView)
+}
+
+func TestInputArea_EnabledAcceptsInput(t *testing.T) {
+	ia := NewInputArea(80, 5, theme.DefaultTheme)
+	ia.Focus()
+
+	// Ensure it's enabled
+	ia.SetDisabled(false)
+
+	// Set initial value
+	ia.SetValue("test")
+
+	// Update should work when enabled
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
+	updatedModel, _ := ia.Update(msg)
+
+	updatedIA, ok := updatedModel.(*InputArea)
+	assert.True(t, ok)
+	assert.NotNil(t, updatedIA)
+
+	// The textarea should have processed the input
+	// (exact behavior depends on textarea, but it should not be empty)
+	assert.NotEmpty(t, updatedIA.GetValue())
+}

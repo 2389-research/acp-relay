@@ -16,6 +16,7 @@ type InputArea struct {
 	theme    theme.Theme
 	textarea textarea.Model
 	focused  bool
+	disabled bool
 }
 
 // NewInputArea creates a new InputArea with the specified dimensions and theme.
@@ -75,6 +76,16 @@ func (ia *InputArea) SetSize(width, height int) {
 	ia.textarea.SetHeight(height)
 }
 
+// SetDisabled enables or disables the input area.
+func (ia *InputArea) SetDisabled(disabled bool) {
+	ia.disabled = disabled
+	if disabled {
+		ia.textarea.Placeholder = "Session is closed (read-only)"
+	} else {
+		ia.textarea.Placeholder = "Type your message... (Enter to send, Shift+Enter for new line)"
+	}
+}
+
 // Init initializes the component (Bubbletea lifecycle).
 func (ia *InputArea) Init() tea.Cmd {
 	return textarea.Blink
@@ -82,6 +93,11 @@ func (ia *InputArea) Init() tea.Cmd {
 
 // Update handles messages and updates the component (Bubbletea lifecycle).
 func (ia *InputArea) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Ignore all input when disabled
+	if ia.disabled {
+		return ia, nil
+	}
+
 	var cmd tea.Cmd
 	ia.textarea, cmd = ia.textarea.Update(msg)
 	return ia, cmd
@@ -89,9 +105,16 @@ func (ia *InputArea) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the input area with theme styling.
 func (ia *InputArea) View() string {
-	style := ia.theme.InputAreaStyle().
+	baseStyle := ia.theme.InputAreaStyle().
 		Width(ia.width).
 		Height(ia.height)
 
-	return style.Render(ia.textarea.View())
+	// Apply gray background when disabled
+	if ia.disabled {
+		baseStyle = baseStyle.
+			Background(ia.theme.Dim).
+			Foreground(lipgloss.Color("#666666"))
+	}
+
+	return baseStyle.Render(ia.textarea.View())
 }

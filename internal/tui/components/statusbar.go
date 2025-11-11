@@ -17,6 +17,7 @@ type StatusBar struct {
 	customStatus      string // For temporary status messages like "Agent is thinking..."
 	progressVisible   bool
 	progressValue     float64
+	readOnlyMode      bool
 }
 
 func NewStatusBar(width int, t theme.Theme) *StatusBar {
@@ -38,6 +39,10 @@ func (s *StatusBar) SetActiveSession(name string) {
 
 func (s *StatusBar) SetStatus(status string) {
 	s.customStatus = status
+}
+
+func (s *StatusBar) SetReadOnlyMode(readOnly bool) {
+	s.readOnlyMode = readOnly
 }
 
 func (s *StatusBar) SetSize(width int) {
@@ -62,7 +67,28 @@ func (s *StatusBar) AdvanceProgress(amount float64) {
 }
 
 func (s *StatusBar) View() string {
-	// Connection status with icon
+	statusPart := s.formatConnectionStatus()
+	sessionPart := s.formatSessionInfo()
+	shortcuts := "Tab: Navigate, ?: Help, q: Quit"
+
+	leftContent := fmt.Sprintf("%s %s", statusPart, sessionPart)
+	fullContent := s.buildStatusLine(leftContent, shortcuts)
+
+	statusLine := s.theme.StatusBarStyle().
+		Width(s.width - 2).
+		Render(fullContent)
+
+	// Add progress bar below status line if visible
+	if s.progressVisible {
+		progressBar := s.renderProgressBar()
+		return statusLine + "\n" + progressBar
+	}
+
+	return statusLine
+}
+
+// formatConnectionStatus returns the connection status icon and text.
+func (s *StatusBar) formatConnectionStatus() string {
 	var statusIcon string
 	var statusText string
 
@@ -81,28 +107,27 @@ func (s *StatusBar) View() string {
 		statusText = "Disconnected"
 	}
 
-	statusPart := fmt.Sprintf("[%s %s]", statusIcon, statusText)
+	return fmt.Sprintf("[%s %s]", statusIcon, statusText)
+}
 
-	// Session info or custom status
-	var sessionPart string
+// formatSessionInfo returns the session info or custom status.
+func (s *StatusBar) formatSessionInfo() string {
 	switch {
+	case s.readOnlyMode:
+		// Read-only mode takes priority over custom status
+		return "👀 Viewing closed session (read-only)"
 	case s.customStatus != "":
 		// Show custom status (takes priority)
-		sessionPart = s.customStatus
+		return s.customStatus
 	case s.activeSessionName != "":
-		sessionPart = fmt.Sprintf("Session: %s", s.activeSessionName)
+		return fmt.Sprintf("Session: %s", s.activeSessionName)
 	default:
-		sessionPart = "No active session"
+		return "No active session"
 	}
+}
 
-	// Keyboard shortcuts
-	shortcuts := "Tab: Navigate, ?: Help, q: Quit"
-
-	// Build the status bar with separator
-	leftContent := fmt.Sprintf("%s %s", statusPart, sessionPart)
-
-	// Calculate spacing to right-align shortcuts
-	// Account for visual width without ANSI codes
+// buildStatusLine constructs the status line with proper spacing.
+func (s *StatusBar) buildStatusLine(leftContent, shortcuts string) string {
 	plainLeft := stripAnsiForWidth(leftContent)
 	plainShortcuts := stripAnsiForWidth(shortcuts)
 
@@ -114,19 +139,7 @@ func (s *StatusBar) View() string {
 	}
 
 	spacer := strings.Repeat(" ", padding)
-	fullContent := fmt.Sprintf("%s%s| %s", leftContent, spacer, shortcuts)
-
-	statusLine := s.theme.StatusBarStyle().
-		Width(s.width - 2).
-		Render(fullContent)
-
-	// Add progress bar below status line if visible
-	if s.progressVisible {
-		progressBar := s.renderProgressBar()
-		return statusLine + "\n" + progressBar
-	}
-
-	return statusLine
+	return fmt.Sprintf("%s%s| %s", leftContent, spacer, shortcuts)
 }
 
 // renderProgressBar renders a 40-character width progress bar using █ and ░ characters.

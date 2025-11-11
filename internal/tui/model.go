@@ -45,6 +45,7 @@ type Model struct {
 	focusedArea     FocusArea
 	activeSessionID string
 	sidebarVisible  bool
+	readOnlyMode    bool   // True when viewing a closed session
 	currentThought  string // Accumulates agent_thought_chunk content
 	currentResponse string // Accumulates session/chunk content for typing indicator
 }
