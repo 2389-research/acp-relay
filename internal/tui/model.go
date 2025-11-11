@@ -76,6 +76,35 @@ func NewModel(cfg *config.Config) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	// Initialize input area blinking cursor
-	return m.inputArea.Init()
+	// Initialize input area blinking cursor and connect to relay
+	return tea.Batch(
+		m.inputArea.Init(),
+		m.connectToRelay(),
+	)
+}
+
+// connectToRelay returns a command that connects to the relay server
+func (m Model) connectToRelay() tea.Cmd {
+	return func() tea.Msg {
+		// Update status to connecting
+		m.statusBar.SetConnectionStatus("connecting")
+
+		if err := m.relayClient.Connect(); err != nil {
+			return RelayErrorMsg{Err: err}
+		}
+
+		return RelayConnectedMsg{}
+	}
+}
+
+// waitForRelayMessage returns a command that waits for the next relay message
+func (m Model) waitForRelayMessage() tea.Cmd {
+	return func() tea.Msg {
+		select {
+		case msg := <-m.relayClient.Incoming():
+			return RelayMessageMsg{Data: msg}
+		case err := <-m.relayClient.Errors():
+			return RelayErrorMsg{Err: err}
+		}
+	}
 }

@@ -18,6 +18,10 @@ type RelayErrorMsg struct {
 	Err error
 }
 
+type RelayConnectedMsg struct{}
+
+type RelayDisconnectedMsg struct{}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
@@ -64,13 +68,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Route to focused component
 		return m.handleFocusedInput(msg)
 
+	case RelayConnectedMsg:
+		// Connection established, update status and start listening
+		m.statusBar.SetConnectionStatus("connected")
+		return m, m.waitForRelayMessage()
+
 	case RelayMessageMsg:
 		// Handle incoming WebSocket messages
-		// TODO: Parse and route to appropriate handler
-		return m, nil
+		// TODO: Parse JSON-RPC response and route appropriately
+		// For now, add as system message
+		if m.activeSessionID != "" {
+			sysMsg := &client.Message{
+				SessionID: m.activeSessionID,
+				Type:      client.MessageTypeSystem,
+				Content:   string(msg.Data),
+				Timestamp: time.Now(),
+			}
+			m.messageStore.AddMessage(sysMsg)
+			m = m.updateChatView()
+		}
+		// Continue listening for more messages
+		return m, m.waitForRelayMessage()
 
 	case RelayErrorMsg:
 		// Handle WebSocket errors
+		m.statusBar.SetConnectionStatus("disconnected")
+
 		// Add error message to message store
 		if m.activeSessionID != "" {
 			errMsg := &client.Message{
@@ -80,8 +103,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Timestamp: time.Now(),
 			}
 			m.messageStore.AddMessage(errMsg)
-			m.updateChatView()
+			m = m.updateChatView()
 		}
+		return m, nil
+
+	case RelayDisconnectedMsg:
+		// Handle disconnection
+		m.statusBar.SetConnectionStatus("disconnected")
 		return m, nil
 	}
 
@@ -226,13 +254,13 @@ func (m Model) onSendMessage() Model {
 	}
 
 	// Add user message to store
-	msg := &client.Message{
+	userMsg := &client.Message{
 		SessionID: m.activeSessionID,
 		Type:      client.MessageTypeUser,
 		Content:   content,
 		Timestamp: time.Now(),
 	}
-	m.messageStore.AddMessage(msg)
+	m.messageStore.AddMessage(userMsg)
 
 	// Clear input
 	m.inputArea.Clear()
@@ -240,7 +268,33 @@ func (m Model) onSendMessage() Model {
 	// Update chat view
 	m = m.updateChatView()
 
-	// TODO: Send message to relay server
+	// Send message to relay server
+	if m.relayClient.IsConnected() {
+		// TODO: Construct proper JSON-RPC request
+		// For now, send raw content
+		jsonMsg := []byte(content)
+		if err := m.relayClient.Send(jsonMsg); err != nil {
+			// Add error message
+			errMsg := &client.Message{
+				SessionID: m.activeSessionID,
+				Type:      client.MessageTypeError,
+				Content:   "Failed to send: " + err.Error(),
+				Timestamp: time.Now(),
+			}
+			m.messageStore.AddMessage(errMsg)
+			m = m.updateChatView()
+		}
+	} else {
+		// Not connected, add warning
+		warnMsg := &client.Message{
+			SessionID: m.activeSessionID,
+			Type:      client.MessageTypeError,
+			Content:   "Not connected to relay server",
+			Timestamp: time.Now(),
+		}
+		m.messageStore.AddMessage(warnMsg)
+		m = m.updateChatView()
+	}
 
 	return m
 }
