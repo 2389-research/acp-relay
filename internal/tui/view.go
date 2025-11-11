@@ -43,6 +43,12 @@ func (m Model) View() string {
 		m.statusBar.View(),
 	)
 
+	// Overlay session selection modal if visible
+	if m.sessionModal != nil {
+		// Render session selection modal on top of the base view
+		return m.sessionModal.View()
+	}
+
 	// Overlay help if visible
 	if m.helpOverlay.IsVisible() {
 		// Render help overlay on top of the base view

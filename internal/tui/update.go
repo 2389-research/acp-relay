@@ -11,6 +11,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/harper/acp-relay/internal/tui/client"
+	"github.com/harper/acp-relay/internal/tui/screens"
+	"github.com/harper/acp-relay/internal/tui/theme"
 )
 
 // Custom message types for relay communication.
@@ -31,6 +33,19 @@ type SessionResumeResultMsg struct {
 	Err       error
 }
 
+// Session selection modal message types.
+type showSessionSelectionMsg struct {
+	Sessions []client.DBSession
+}
+
+type sessionSelectedMsg struct {
+	Session client.DBSession
+}
+
+type createNewSessionMsg struct{}
+
+type createNewSessionAfterConnectMsg struct{}
+
 // Global message ID counter for JSON-RPC requests.
 var messageIDCounter uint64
 
@@ -44,9 +59,118 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.updateComponentSizes()
+
+		// Also update modal if visible
+		if m.sessionModal != nil {
+			_, cmd = m.sessionModal.Update(msg)
+			cmds = append(cmds, cmd)
+		}
+
+		return m, tea.Batch(cmds...)
+
+	case showSessionSelectionMsg:
+		// Show session selection modal
+		DebugLog("Update: showSessionSelectionMsg - showing modal with %d sessions", len(msg.Sessions))
+
+		// Import screens package to create modal
+		// We need to add this import at the top of the file
+		m.sessionModal = createSessionSelectionScreen(msg.Sessions, m.width, m.height, m.theme)
+
 		return m, nil
 
+	case sessionSelectedMsg:
+		// User selected a session from modal
+		DebugLog("Update: sessionSelectedMsg - session selected: %s (active=%v)", msg.Session.ID, msg.Session.IsActive)
+
+		// Close modal
+		m.sessionModal = nil
+
+		// Connect to relay first
+		if !m.relayClient.IsConnected() {
+			DebugLog("Update: Connecting to relay before handling session selection")
+			if err := m.relayClient.Connect(); err != nil {
+				DebugLog("Update: Connection failed: %v", err)
+				return m, func() tea.Msg { return RelayErrorMsg{Err: err} }
+			}
+			m.statusBar.SetConnectionStatus("connected")
+		}
+
+		// If session is active, attempt to resume
+		if msg.Session.IsActive {
+			DebugLog("Update: Session is active, attempting resume")
+			return m, func() tea.Msg {
+				err := m.relayClient.ResumeSession(msg.Session.ID)
+				return SessionResumeResultMsg{
+					SessionID: msg.Session.ID,
+					Err:       err,
+				}
+			}
+		}
+
+		// If session is closed, load history in read-only mode
+		DebugLog("Update: Session is closed, loading history in read-only mode")
+		m.activeSessionID = msg.Session.ID
+
+		// Load message history from database
+		if m.dbClient != nil {
+			messages, err := m.dbClient.GetSessionMessages(msg.Session.ID)
+			if err != nil {
+				DebugLog("Update: Failed to load session history: %v", err)
+			} else {
+				DebugLog("Update: Loaded %d messages from session history", len(messages))
+				for _, historyMsg := range messages {
+					m.messageStore.AddMessage(historyMsg)
+				}
+			}
+		}
+
+		// Update status bar
+		m.statusBar.SetActiveSession(msg.Session.ID[:12] + " (Read-Only)")
+
+		// Update chat view
+		m = m.updateChatView()
+
+		// Start listening for relay messages
+		return m, m.waitForRelayMessage()
+
+	case createNewSessionMsg:
+		// User wants to create a new session
+		DebugLog("Update: createNewSessionMsg - creating new session")
+
+		// Close modal
+		m.sessionModal = nil
+
+		// Connect to relay and create session
+		if !m.relayClient.IsConnected() {
+			DebugLog("Update: Connecting to relay before creating session")
+			return m, tea.Batch(
+				m.connectToRelay(),
+				// After connection, create session
+				func() tea.Msg {
+					time.Sleep(100 * time.Millisecond) // Brief delay for connection
+					return createNewSessionAfterConnectMsg{}
+				},
+			)
+		}
+
+		// Already connected, create session immediately
+		m = m.onCreateSession()
+		return m, m.waitForRelayMessage()
+
+	case createNewSessionAfterConnectMsg:
+		// Connection established, now create session
+		DebugLog("Update: createNewSessionAfterConnectMsg - creating session after connection")
+		m = m.onCreateSession()
+		return m, m.waitForRelayMessage()
+
 	case tea.KeyMsg:
+		// If modal is visible, route all keys to it
+		if m.sessionModal != nil {
+			var modalModel tea.Model
+			modalModel, cmd = m.sessionModal.Update(msg)
+			m.sessionModal = modalModel
+			return m, cmd
+		}
 		// Help overlay gets priority
 		if m.helpOverlay.IsVisible() {
 			if msg.String() == "?" || msg.String() == "esc" {
@@ -637,5 +761,81 @@ func (m Model) onResumeSession() tea.Cmd {
 			SessionID: sessionID,
 			Err:       err,
 		}
+	}
+}
+
+// createSessionSelectionScreen creates a session selection modal and wraps message types.
+func createSessionSelectionScreen(sessions []client.DBSession, width, height int, th theme.Theme) tea.Model {
+	// We need to import the screens package - will be added at compile time
+	// This is a wrapper that converts between internal message types and screens message types
+	return &sessionSelectionWrapper{
+		sessions: sessions,
+		width:    width,
+		height:   height,
+		theme:    th,
+	}
+}
+
+// sessionSelectionWrapper wraps the screens.SessionSelectionScreen to convert message types.
+type sessionSelectionWrapper struct {
+	sessions []client.DBSession
+	width    int
+	height   int
+	theme    theme.Theme
+	screen   tea.Model
+}
+
+func (w *sessionSelectionWrapper) Init() tea.Cmd {
+	// Import screens package and create screen
+	// This will be done via direct import at the top of the file
+	return nil
+}
+
+func (w *sessionSelectionWrapper) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Lazy initialization
+	if w.screen == nil {
+		// We'll need to add the import - for now use a placeholder
+		// This will be fixed when we add the import statement
+		w.screen = newSessionSelectionScreenFromUpdate(w.sessions, w.width, w.height, w.theme)
+	}
+
+	// Forward to wrapped screen
+	updatedScreen, cmd := w.screen.Update(msg)
+	w.screen = updatedScreen
+
+	// Convert message types if needed
+	if cmd != nil {
+		return w, func() tea.Msg {
+			msg := cmd()
+			// Convert screens package messages to internal messages
+			return convertScreensMessage(msg)
+		}
+	}
+
+	return w, nil
+}
+
+func (w *sessionSelectionWrapper) View() string {
+	if w.screen == nil {
+		return ""
+	}
+	return w.screen.View()
+}
+
+// newSessionSelectionScreenFromUpdate creates a SessionSelectionScreen from the screens package.
+func newSessionSelectionScreenFromUpdate(sessions []client.DBSession, width, height int, th theme.Theme) tea.Model {
+	return screens.NewSessionSelectionScreen(sessions, width, height, th)
+}
+
+// convertScreensMessage converts screens package messages to internal TUI messages.
+func convertScreensMessage(msg tea.Msg) tea.Msg {
+	switch msg := msg.(type) {
+	case screens.SessionSelectedMsg:
+		return sessionSelectedMsg{Session: msg.Session}
+	case screens.CreateNewSessionMsg:
+		return createNewSessionMsg{}
+	default:
+		// Pass through other messages (like tea.QuitMsg)
+		return msg
 	}
 }

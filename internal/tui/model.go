@@ -28,11 +28,12 @@ type Model struct {
 	height int
 
 	// Components
-	sidebar     *components.Sidebar
-	chatView    *components.ChatView
-	inputArea   *components.InputArea
-	statusBar   *components.StatusBar
-	helpOverlay *components.HelpOverlay
+	sidebar      *components.Sidebar
+	chatView     *components.ChatView
+	inputArea    *components.InputArea
+	statusBar    *components.StatusBar
+	helpOverlay  *components.HelpOverlay
+	sessionModal tea.Model // Session selection modal
 
 	// Data managers
 	relayClient    *client.RelayClient
@@ -93,7 +94,7 @@ func NewModel(cfg *config.Config) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	// Load saved sessions
+	// Load saved sessions from SessionManager
 	dataDir := os.ExpandEnv("$HOME/.local/share/acp-tui")
 	if err := m.sessionManager.Load(dataDir); err != nil {
 		DebugLog("Init: Failed to load sessions: %v", err)
@@ -105,10 +106,27 @@ func (m Model) Init() tea.Cmd {
 	sessions := m.sessionManager.List()
 	m.sidebar.SetSessions(sessions)
 
-	// Initialize input area blinking cursor and connect to relay
+	// Query database for all sessions to show in modal
+	var dbSessions []client.DBSession
+	if m.dbClient != nil {
+		var err error
+		dbSessions, err = m.dbClient.GetAllSessions()
+		if err != nil {
+			DebugLog("Init: Failed to query database sessions: %v", err)
+			// Continue with empty sessions list
+			dbSessions = []client.DBSession{}
+		} else {
+			DebugLog("Init: Loaded %d sessions from database", len(dbSessions))
+		}
+	}
+
+	// Initialize input area blinking cursor and show session selection modal
 	return tea.Batch(
 		m.inputArea.Init(),
-		m.connectToRelay(),
+		func() tea.Msg {
+			// Import the screens package message type
+			return showSessionSelectionMsg{Sessions: dbSessions}
+		},
 	)
 }
 
