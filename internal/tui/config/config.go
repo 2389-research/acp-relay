@@ -81,7 +81,7 @@ func DefaultConfig() *Config {
 			VimMode:            false,
 		},
 		Sessions: SessionsConfig{
-			DefaultWorkingDir:   "~/acp-workspaces",
+			DefaultWorkingDir:   "/tmp",
 			AutoCreateWorkspace: true,
 		},
 		Keybindings: KeybindingsConfig{
