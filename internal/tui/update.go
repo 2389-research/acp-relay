@@ -3,8 +3,10 @@
 package tui
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -24,6 +26,9 @@ type RelayErrorMsg struct {
 type RelayConnectedMsg struct{}
 
 type RelayDisconnectedMsg struct{}
+
+// Global message ID counter for JSON-RPC requests
+var messageIDCounter uint64
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
@@ -88,21 +93,68 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case RelayMessageMsg:
 		// Handle incoming WebSocket messages
-		DebugLog("Update: RelayMessageMsg - received %d bytes", len(msg.Data))
-		// TODO: Parse JSON-RPC response and route appropriately
-		// For now, add as system message
-		if m.activeSessionID != "" {
-			sysMsg := &client.Message{
-				SessionID: m.activeSessionID,
-				Type:      client.MessageTypeSystem,
-				Content:   string(msg.Data),
-				Timestamp: time.Now(),
+		DebugLog("Update: RelayMessageMsg - received %d bytes: %s", len(msg.Data), string(msg.Data))
+
+		// Parse JSON-RPC response
+		var response map[string]interface{}
+		if err := json.Unmarshal(msg.Data, &response); err != nil {
+			DebugLog("Update: RelayMessageMsg - JSON parse error: %v", err)
+			// Add error message
+			if m.activeSessionID != "" {
+				errMsg := &client.Message{
+					SessionID: m.activeSessionID,
+					Type:      client.MessageTypeError,
+					Content:   "Failed to parse server response: " + err.Error(),
+					Timestamp: time.Now(),
+				}
+				m.messageStore.AddMessage(errMsg)
+				m = m.updateChatView()
 			}
-			m.messageStore.AddMessage(sysMsg)
-			m = m.updateChatView()
-		} else {
-			DebugLog("Update: RelayMessageMsg - no active session, message ignored")
+			return m, m.waitForRelayMessage()
 		}
+
+		// Extract method and params
+		method, _ := response["method"].(string)
+		params, _ := response["params"].(map[string]interface{})
+
+		DebugLog("Update: RelayMessageMsg - method=%s", method)
+
+		// Route based on method
+		switch method {
+		case "session/chunk":
+			// Agent is streaming a response chunk
+			if m.activeSessionID != "" {
+				if content, ok := params["content"].(string); ok {
+					agentMsg := &client.Message{
+						SessionID: m.activeSessionID,
+						Type:      client.MessageTypeAgent,
+						Content:   content,
+						Timestamp: time.Now(),
+					}
+					m.messageStore.AddMessage(agentMsg)
+					m = m.updateChatView()
+				}
+			}
+
+		case "session/complete":
+			// Agent finished responding
+			DebugLog("Update: session/complete received")
+			// Could add a system message or update status
+
+		default:
+			// Unknown method or notification - log it
+			if m.activeSessionID != "" {
+				sysMsg := &client.Message{
+					SessionID: m.activeSessionID,
+					Type:      client.MessageTypeSystem,
+					Content:   fmt.Sprintf("[%s] %s", method, string(msg.Data)),
+					Timestamp: time.Now(),
+				}
+				m.messageStore.AddMessage(sysMsg)
+				m = m.updateChatView()
+			}
+		}
+
 		// Continue listening for more messages
 		return m, m.waitForRelayMessage()
 
@@ -300,13 +352,42 @@ func (m Model) onSendMessage() Model {
 
 	// Send message to relay server
 	if m.relayClient.IsConnected() {
-		DebugLog("onSendMessage: Sending message to relay (session=%s): %s", m.activeSessionID, content)
-		// TODO: Construct proper JSON-RPC request
-		// For now, send raw content
-		jsonMsg := []byte(content)
+		// Construct JSON-RPC 2.0 request
+		msgID := atomic.AddUint64(&messageIDCounter, 1)
+
+		request := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"method":  "session/prompt",
+			"params": map[string]interface{}{
+				"sessionId": m.activeSessionID,
+				"content": []map[string]string{
+					{
+						"type": "text",
+						"text": content,
+					},
+				},
+			},
+			"id": msgID,
+		}
+
+		jsonMsg, err := json.Marshal(request)
+		if err != nil {
+			DebugLog("onSendMessage: JSON marshal failed: %v", err)
+			errMsg := &client.Message{
+				SessionID: m.activeSessionID,
+				Type:      client.MessageTypeError,
+				Content:   "Failed to encode message: " + err.Error(),
+				Timestamp: time.Now(),
+			}
+			m.messageStore.AddMessage(errMsg)
+			m = m.updateChatView()
+			return m
+		}
+
+		DebugLog("onSendMessage: Sending JSON-RPC request (id=%d, session=%s): %s", msgID, m.activeSessionID, string(jsonMsg))
+
 		if err := m.relayClient.Send(jsonMsg); err != nil {
 			DebugLog("onSendMessage: Send failed: %v", err)
-			// Add error message
 			errMsg := &client.Message{
 				SessionID: m.activeSessionID,
 				Type:      client.MessageTypeError,
@@ -316,7 +397,7 @@ func (m Model) onSendMessage() Model {
 			m.messageStore.AddMessage(errMsg)
 			m = m.updateChatView()
 		} else {
-			DebugLog("onSendMessage: Message sent successfully")
+			DebugLog("onSendMessage: Message sent successfully (id=%d)", msgID)
 		}
 	} else {
 		DebugLog("onSendMessage: Not connected, cannot send message")
