@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
+	"github.com/harper/acp-relay/internal/xdg"
 	"gopkg.in/yaml.v3"
 )
 
@@ -81,7 +81,7 @@ func DefaultConfig() *Config {
 			VimMode:            false,
 		},
 		Sessions: SessionsConfig{
-			DefaultWorkingDir:   "/tmp",
+			DefaultWorkingDir:   "$XDG_DATA_HOME/acp-tui/workspaces",
 			AutoCreateWorkspace: true,
 		},
 		Keybindings: KeybindingsConfig{
@@ -216,21 +216,9 @@ func (c *Config) Validate() {
 		c.Logging.Level = "info"
 	}
 
-	// Expand ~ in paths
-	c.Sessions.DefaultWorkingDir = expandPath(c.Sessions.DefaultWorkingDir)
-	c.Logging.File = expandPath(c.Logging.File)
-}
-
-// expandPath expands ~ in paths.
-func expandPath(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		home := os.Getenv("HOME")
-		if home == "" {
-			home = "."
-		}
-		return filepath.Join(home, path[2:])
-	}
-	return path
+	// Expand ~ and XDG variables in paths
+	c.Sessions.DefaultWorkingDir = xdg.ExpandPath(c.Sessions.DefaultWorkingDir)
+	c.Logging.File = xdg.ExpandPath(c.Logging.File)
 }
 
 func saveDefault(cfg *Config, path string) error {

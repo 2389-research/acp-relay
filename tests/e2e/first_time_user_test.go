@@ -25,13 +25,22 @@ func TestFirstTimeUser_FullFlow(t *testing.T) {
 
 	startTime := time.Now()
 
+	// Find repo root (go up two levels from tests/e2e)
+	repoRoot, err := filepath.Abs("../..")
+	require.NoError(t, err, "Failed to find repo root")
+
 	// Step 1: Build binaries
 	t.Log("Building acp-relay...")
-	cmd := exec.Command("go", "build", "-o", "acp-relay", "./cmd/relay")
+	binaryPath := filepath.Join(repoRoot, "acp-relay")
+	//nolint:gosec // test build command with controlled paths
+	cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/relay")
+	cmd.Dir = repoRoot
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
-	defer func() { _ = os.Remove("acp-relay") }()
+	defer func() { _ = os.Remove(binaryPath) }()
 
 	// Step 2: Setup (automated with default answers)
 	tmpDir := t.TempDir()
@@ -75,7 +84,7 @@ database:
 	defer cancel()
 
 	//nolint:gosec // test subprocess with controlled arguments
-	cmd = exec.CommandContext(ctx, "./acp-relay", "--config", configPath)
+	cmd = exec.CommandContext(ctx, binaryPath, "--config", configPath)
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("Failed to start server: %v", err)
 	}

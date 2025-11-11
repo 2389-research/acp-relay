@@ -104,7 +104,7 @@ agent:
   mode: "process"
 
 database:
-  path: "$XDG_DATA_HOME/db.sqlite"
+  path: "$XDG_DATA_HOME/acp-relay/db.sqlite"
 `
 
 	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
@@ -117,11 +117,11 @@ database:
 	}
 
 	// Should NOT contain literal $XDG_DATA_HOME
-	if cfg.Database.Path == "$XDG_DATA_HOME/db.sqlite" {
+	if cfg.Database.Path == "$XDG_DATA_HOME/acp-relay/db.sqlite" {
 		t.Error("XDG variable not expanded in database path")
 	}
 
-	// Should contain actual path
+	// Should contain actual path ($XDG_DATA_HOME expands to ~/.local/share, not ~/.local/share/acp-relay)
 	home := os.Getenv("HOME")
 	expectedPath := filepath.Join(home, ".local", "share", "acp-relay", "db.sqlite")
 	if cfg.Database.Path != expectedPath {

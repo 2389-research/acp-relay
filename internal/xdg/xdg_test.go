@@ -73,25 +73,30 @@ func TestCacheHome(t *testing.T) {
 }
 
 func TestExpandPath(t *testing.T) {
+	home := os.Getenv("HOME")
+	if home == "" {
+		t.Skip("HOME not set")
+	}
+
 	tests := []struct {
 		name  string
 		input string
 		want  string
 	}{
 		{
-			name:  "XDG_DATA_HOME variable",
-			input: "$XDG_DATA_HOME/db.sqlite",
-			want:  filepath.Join(DataHome(), "db.sqlite"),
+			name:  "XDG_DATA_HOME variable with app subdirectory",
+			input: "$XDG_DATA_HOME/acp-relay/db.sqlite",
+			want:  filepath.Join(home, ".local", "share", "acp-relay", "db.sqlite"),
 		},
 		{
-			name:  "XDG_CONFIG_HOME variable",
-			input: "$XDG_CONFIG_HOME/config.yaml",
-			want:  filepath.Join(ConfigHome(), "config.yaml"),
+			name:  "XDG_CONFIG_HOME variable with app subdirectory",
+			input: "$XDG_CONFIG_HOME/acp-relay/config.yaml",
+			want:  filepath.Join(home, ".config", "acp-relay", "config.yaml"),
 		},
 		{
-			name:  "XDG_CACHE_HOME variable",
-			input: "$XDG_CACHE_HOME/cache.db",
-			want:  filepath.Join(CacheHome(), "cache.db"),
+			name:  "XDG_CACHE_HOME variable with app subdirectory",
+			input: "$XDG_CACHE_HOME/acp-relay/cache.db",
+			want:  filepath.Join(home, ".cache", "acp-relay", "cache.db"),
 		},
 		{
 			name:  "non-XDG path passes through",
@@ -122,10 +127,10 @@ func TestExpandPath_MissingHOME(t *testing.T) {
 	defer func() { _ = os.Setenv("HOME", oldHome) }()
 
 	// Should fall back to current directory
-	got := ExpandPath("$XDG_DATA_HOME/db.sqlite")
+	got := ExpandPath("$XDG_DATA_HOME/acp-relay/db.sqlite")
 
 	// Should not create path at root
-	if filepath.IsAbs(got) && filepath.Dir(got) == "/" {
+	if filepath.IsAbs(got) && filepath.Dir(filepath.Dir(got)) == "/" {
 		t.Errorf("ExpandPath with missing HOME created root path: %q", got)
 	}
 }
@@ -133,7 +138,7 @@ func TestExpandPath_MissingHOME(t *testing.T) {
 func TestExpandPath_StringPrefix(t *testing.T) {
 	// Regression test for Error #3 from previous implementation
 	// Must use strings.HasPrefix, not filepath.HasPrefix
-	input := "$XDG_DATA_HOME/db.sqlite"
+	input := "$XDG_DATA_HOME/acp-relay/db.sqlite"
 	got := ExpandPath(input)
 
 	// Should detect $XDG_* prefix correctly

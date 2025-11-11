@@ -18,16 +18,31 @@ func ConfigHome() string {
 	return filepath.Join(home, ".config", "acp-relay")
 }
 
-// DataHome returns ~/.local/share/acp-relay.
+// DataHome returns ~/.local/share/acp-relay or respects XDG_DATA_HOME.
 func DataHome() string {
+	if xdgData := os.Getenv("XDG_DATA_HOME"); xdgData != "" {
+		return filepath.Join(xdgData, "acp-relay")
+	}
 	home := getHome()
 	return filepath.Join(home, ".local", "share", "acp-relay")
 }
 
-// CacheHome returns ~/.cache/acp-relay.
+// CacheHome returns ~/.cache/acp-relay or respects XDG_CACHE_HOME.
 func CacheHome() string {
+	if xdgCache := os.Getenv("XDG_CACHE_HOME"); xdgCache != "" {
+		return filepath.Join(xdgCache, "acp-relay")
+	}
 	home := getHome()
 	return filepath.Join(home, ".cache", "acp-relay")
+}
+
+// TUIDataHome returns ~/.local/share/acp-tui or respects XDG_DATA_HOME.
+func TUIDataHome() string {
+	if xdgData := os.Getenv("XDG_DATA_HOME"); xdgData != "" {
+		return filepath.Join(xdgData, "acp-tui")
+	}
+	home := getHome()
+	return filepath.Join(home, ".local", "share", "acp-tui")
 }
 
 // ExpandPath expands $XDG_* variables and ~ in config paths.
@@ -38,14 +53,27 @@ func ExpandPath(path string) string {
 	}
 
 	// CRITICAL: Use strings.HasPrefix, not filepath.HasPrefix (Error #3 fix)
+	// Expand generic XDG variables to their base directories (not app-specific)
 	if strings.HasPrefix(path, "$XDG_DATA_HOME") {
-		return strings.Replace(path, "$XDG_DATA_HOME", DataHome(), 1)
+		xdgData := os.Getenv("XDG_DATA_HOME")
+		if xdgData == "" {
+			xdgData = filepath.Join(getHome(), ".local", "share")
+		}
+		return strings.Replace(path, "$XDG_DATA_HOME", xdgData, 1)
 	}
 	if strings.HasPrefix(path, "$XDG_CONFIG_HOME") {
-		return strings.Replace(path, "$XDG_CONFIG_HOME", ConfigHome(), 1)
+		xdgConfig := os.Getenv("XDG_CONFIG_HOME")
+		if xdgConfig == "" {
+			xdgConfig = filepath.Join(getHome(), ".config")
+		}
+		return strings.Replace(path, "$XDG_CONFIG_HOME", xdgConfig, 1)
 	}
 	if strings.HasPrefix(path, "$XDG_CACHE_HOME") {
-		return strings.Replace(path, "$XDG_CACHE_HOME", CacheHome(), 1)
+		xdgCache := os.Getenv("XDG_CACHE_HOME")
+		if xdgCache == "" {
+			xdgCache = filepath.Join(getHome(), ".cache")
+		}
+		return strings.Replace(path, "$XDG_CACHE_HOME", xdgCache, 1)
 	}
 
 	// Non-XDG paths pass through unchanged

@@ -23,10 +23,10 @@ agent:
 #   network_mode: "bridge"
 #   memory_limit: "512m"
 #   cpu_limit: 1.0
-#   workspace_host_base: "/tmp/acp-workspaces"
+#   workspace_host_base: "$XDG_DATA_HOME/acp-relay/workspaces"
 #   workspace_container_path: "/workspace"
 #   auto_remove: true
 #   startup_timeout_seconds: 10
 
 database:
-  path: "./relay-messages.db"
+  path: "$XDG_DATA_HOME/acp-relay/relay-messages.db"
