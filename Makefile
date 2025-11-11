@@ -21,7 +21,8 @@ test-short:
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
-	@rm -f acp-relay main relay
+	@rm -f acp-relay main relay acp-tui
+	@rm -f bin/acp-tui
 	@rm -f *.db *.db-shm *.db-wal
 	@echo "✓ Cleaned"
 
