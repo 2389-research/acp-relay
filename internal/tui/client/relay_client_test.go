@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -205,4 +206,127 @@ func TestRelayClient_ResumeSession_Timeout(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "timeout")
 	assert.LessOrEqual(t, duration, 6*time.Second) // Allow slight overhead
+}
+
+// TestRelayClient_ResumeWithConcurrentMessages verifies that resume works correctly
+// even when other messages are being sent and received concurrently.
+// This tests the fix for the incoming channel race condition.
+//
+//nolint:gocognit,funlen // Test handler requires complex setup with concurrent goroutines
+func TestRelayClient_ResumeWithConcurrentMessages(t *testing.T) {
+	// Handler that sends notifications while processing resume request
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+
+		// Start sending periodic notifications
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+
+		notificationCount := 0
+		var writeMu sync.Mutex
+
+		// Handle messages in separate goroutine
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			for {
+				_, msg, err := conn.ReadMessage()
+				if err != nil {
+					return
+				}
+
+				var req map[string]interface{}
+				if err := json.Unmarshal(msg, &req); err != nil {
+					continue
+				}
+
+				method, _ := req["method"].(string)
+				id, _ := req["id"].(float64)
+
+				if method == "session/resume" {
+					// Send response for resume request
+					params := req["params"].(map[string]interface{})
+					sessionID := params["sessionId"].(string)
+					response := []byte(`{"jsonrpc":"2.0","id":` + fmt.Sprintf("%.0f", id) + `,"result":{"sessionId":"` + sessionID + `"}}`)
+					writeMu.Lock()
+					err := conn.WriteMessage(websocket.TextMessage, response)
+					writeMu.Unlock()
+					if err != nil {
+						return
+					}
+				}
+			}
+		}()
+
+		// Send notifications concurrently
+		for {
+			select {
+			case <-ticker.C:
+				notificationCount++
+				notification := []byte(`{"jsonrpc":"2.0","method":"notification","params":{"count":` + fmt.Sprintf("%d", notificationCount) + `}}`)
+				writeMu.Lock()
+				err := conn.WriteMessage(websocket.TextMessage, notification)
+				writeMu.Unlock()
+				if err != nil {
+					return
+				}
+			case <-done:
+				return
+			}
+		}
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(handler))
+	defer server.Close()
+
+	wsURL := "ws" + server.URL[4:]
+
+	client := NewRelayClient(wsURL)
+	require.NoError(t, client.Connect())
+	defer func() { _ = client.Close() }()
+
+	// Give connection time to stabilize
+	time.Sleep(50 * time.Millisecond)
+
+	// Collect notifications in background
+	notificationsReceived := 0
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case msg := <-client.Incoming():
+				var notification map[string]interface{}
+				if err := json.Unmarshal(msg, &notification); err == nil {
+					if method, ok := notification["method"].(string); ok && method == "notification" {
+						notificationsReceived++
+					}
+				}
+			case <-time.After(2 * time.Second):
+				return
+			}
+		}
+	}()
+
+	// Wait a bit for some notifications to accumulate
+	time.Sleep(100 * time.Millisecond)
+
+	// Now try to resume session - should work despite concurrent notifications
+	err := client.ResumeSession("test-session-concurrent")
+	require.NoError(t, err)
+
+	// Give time for more notifications
+	time.Sleep(100 * time.Millisecond)
+
+	// Close client to stop notification collection
+	require.NoError(t, client.Close())
+	<-done
+
+	// Verify we received notifications (proves main loop still works)
+	assert.Greater(t, notificationsReceived, 0, "should have received notifications during resume")
+	t.Logf("Received %d notifications while processing resume", notificationsReceived)
 }

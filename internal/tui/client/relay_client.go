@@ -13,25 +13,33 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type pendingRequest struct {
+	responseChan chan map[string]interface{}
+	timeout      *time.Timer
+}
+
 type RelayClient struct {
-	url       string
-	conn      *websocket.Conn
-	mu        sync.RWMutex
-	incoming  chan []byte
-	outgoing  chan []byte
-	errors    chan error
-	done      chan struct{}
-	closed    bool
-	messageID uint64
+	url             string
+	conn            *websocket.Conn
+	mu              sync.RWMutex
+	incoming        chan []byte
+	outgoing        chan []byte
+	errors          chan error
+	done            chan struct{}
+	closed          bool
+	messageID       uint64
+	pendingRequests map[uint64]*pendingRequest
+	pendingMu       sync.Mutex
 }
 
 func NewRelayClient(url string) *RelayClient {
 	return &RelayClient{
-		url:      url,
-		incoming: make(chan []byte, 100),
-		outgoing: make(chan []byte, 100),
-		errors:   make(chan error, 10),
-		done:     make(chan struct{}),
+		url:             url,
+		incoming:        make(chan []byte, 100),
+		outgoing:        make(chan []byte, 100),
+		errors:          make(chan error, 10),
+		done:            make(chan struct{}),
+		pendingRequests: make(map[uint64]*pendingRequest),
 	}
 }
 
@@ -131,12 +139,79 @@ func (c *RelayClient) readLoop() {
 			return
 		}
 
+		// Try to route message to pending request
+		if c.routeToRequest(msg) {
+			continue
+		}
+
+		// Otherwise, send to incoming channel for main loop
 		select {
 		case c.incoming <- msg:
 		case <-c.done:
 			return
 		}
 	}
+}
+
+// routeToRequest attempts to route a message to a pending request.
+// Returns true if message was routed, false otherwise.
+func (c *RelayClient) routeToRequest(msg []byte) bool {
+	// Parse message to check for JSON-RPC response with ID
+	var response map[string]interface{}
+	if err := json.Unmarshal(msg, &response); err != nil {
+		return false
+	}
+
+	// Check if this is a response (has an ID)
+	responseID, hasID := response["id"]
+	if !hasID {
+		return false // This is a notification, not a response
+	}
+
+	// Convert ID to uint64
+	var msgID uint64
+	switch v := responseID.(type) {
+	case float64:
+		msgID = uint64(v)
+	case int:
+		if v < 0 {
+			return false
+		}
+		msgID = uint64(v) //nolint:gosec // Negative check above prevents overflow
+	case int64:
+		if v < 0 {
+			return false
+		}
+		msgID = uint64(v) //nolint:gosec // Negative check above prevents overflow
+	case uint64:
+		msgID = v
+	default:
+		return false
+	}
+
+	// Check if we have a pending request for this ID
+	c.pendingMu.Lock()
+	pending, exists := c.pendingRequests[msgID]
+	if exists {
+		delete(c.pendingRequests, msgID)
+	}
+	c.pendingMu.Unlock()
+
+	if !exists {
+		return false
+	}
+
+	// Stop the timeout timer
+	pending.timeout.Stop()
+
+	// Send response to waiting goroutine
+	select {
+	case pending.responseChan <- response:
+	default:
+		// Channel closed or receiver gone
+	}
+
+	return true
 }
 
 func (c *RelayClient) writeLoop() {
@@ -158,7 +233,7 @@ func (c *RelayClient) writeLoop() {
 
 // ResumeSession sends a session/resume JSON-RPC request and waits for response.
 //
-//nolint:gocognit,nestif // JSON-RPC response handling requires nested checks for different response types
+//nolint:gocognit,nestif,funlen // JSON-RPC request/response handling requires setup, send, cleanup logic
 func (c *RelayClient) ResumeSession(sessionID string) error {
 	if !c.IsConnected() {
 		return fmt.Errorf("not connected")
@@ -166,6 +241,27 @@ func (c *RelayClient) ResumeSession(sessionID string) error {
 
 	// Generate unique message ID
 	msgID := atomic.AddUint64(&c.messageID, 1)
+
+	// Create response channel and register pending request
+	responseChan := make(chan map[string]interface{}, 1)
+	timeoutTimer := time.NewTimer(5 * time.Second)
+
+	pending := &pendingRequest{
+		responseChan: responseChan,
+		timeout:      timeoutTimer,
+	}
+
+	c.pendingMu.Lock()
+	c.pendingRequests[msgID] = pending
+	c.pendingMu.Unlock()
+
+	// Cleanup function
+	cleanup := func() {
+		c.pendingMu.Lock()
+		delete(c.pendingRequests, msgID)
+		c.pendingMu.Unlock()
+		timeoutTimer.Stop()
+	}
 
 	// Construct JSON-RPC request
 	request := map[string]interface{}{
@@ -179,47 +275,38 @@ func (c *RelayClient) ResumeSession(sessionID string) error {
 
 	jsonMsg, err := json.Marshal(request)
 	if err != nil {
+		cleanup()
 		return fmt.Errorf("marshal request: %w", err)
 	}
 
 	// Send the request
 	if err := c.Send(jsonMsg); err != nil {
+		cleanup()
 		return fmt.Errorf("send request: %w", err)
 	}
 
-	// Wait for response with 5 second timeout
-	timeout := time.After(5 * time.Second)
-	for {
-		select {
-		case <-timeout:
-			return fmt.Errorf("timeout waiting for session/resume response")
-		case msg := <-c.incoming:
-			// Parse JSON-RPC response
-			var response map[string]interface{}
-			if err := json.Unmarshal(msg, &response); err != nil {
-				continue // Skip malformed messages
-			}
-
-			// Check if this is our response (matching ID)
-			if responseID, ok := response["id"].(float64); ok && uint64(responseID) == msgID {
-				// Check for error
-				if errorData, hasError := response["error"]; hasError {
-					if errorMap, ok := errorData.(map[string]interface{}); ok {
-						if message, ok := errorMap["message"].(string); ok {
-							return fmt.Errorf("resume failed: %s", message)
-						}
-					}
-					return fmt.Errorf("resume failed with unknown error")
+	// Wait for response or timeout
+	select {
+	case response := <-responseChan:
+		// Check for error
+		if errorData, hasError := response["error"]; hasError {
+			if errorMap, ok := errorData.(map[string]interface{}); ok {
+				if message, ok := errorMap["message"].(string); ok {
+					return fmt.Errorf("resume failed: %s", message)
 				}
-
-				// Check for success result
-				if _, hasResult := response["result"]; hasResult {
-					return nil // Success
-				}
-
-				return fmt.Errorf("invalid response format")
 			}
-			// Not our response, continue waiting
+			return fmt.Errorf("resume failed with unknown error")
 		}
+
+		// Check for success result
+		if _, hasResult := response["result"]; hasResult {
+			return nil // Success
+		}
+
+		return fmt.Errorf("invalid response format")
+
+	case <-timeoutTimer.C:
+		cleanup()
+		return fmt.Errorf("timeout waiting for session/resume response")
 	}
 }
