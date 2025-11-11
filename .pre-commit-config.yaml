@@ -33,7 +33,7 @@ repos:
 
       - id: go-build-all
         name: go build all binaries
-        entry: bash -c 'go build -v -o resonate-player .'
+        entry: bash -c 'go build -v ./cmd/relay && go build -v ./cmd/tui'
         language: system
         files: \.go$
         pass_filenames: false
