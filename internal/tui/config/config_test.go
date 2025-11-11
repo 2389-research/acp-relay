@@ -33,7 +33,7 @@ func TestLoadConfig_NoFile(t *testing.T) {
 	assert.Equal(t, "default", cfg.UI.Theme)
 
 	// Should create default config file
-	configPath := filepath.Join(tmpDir, "acp-relay", "config.yaml")
+	configPath := filepath.Join(tmpDir, "acp-tui", "config.yaml")
 	_, err = os.Stat(configPath)
 	assert.NoError(t, err, "config file should be created")
 }

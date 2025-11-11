@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
-	"github.com/harper/acp-relay/internal/xdg"
 	"gopkg.in/yaml.v3"
 )
 
@@ -106,7 +106,15 @@ func Load(configPath string) (*Config, error) {
 
 	// Determine config file location
 	if configPath == "" {
-		configPath = filepath.Join(xdg.ConfigHome(), "config.yaml")
+		configHome := os.Getenv("XDG_CONFIG_HOME")
+		if configHome == "" {
+			home := os.Getenv("HOME")
+			if home == "" {
+				home = "."
+			}
+			configHome = filepath.Join(home, ".config")
+		}
+		configPath = filepath.Join(configHome, "acp-tui", "config.yaml")
 	}
 
 	// If file doesn't exist, create it with defaults
@@ -207,8 +215,20 @@ func (c *Config) Validate() {
 	}
 
 	// Expand ~ in paths
-	c.Sessions.DefaultWorkingDir = xdg.ExpandPath(c.Sessions.DefaultWorkingDir)
-	c.Logging.File = xdg.ExpandPath(c.Logging.File)
+	c.Sessions.DefaultWorkingDir = expandPath(c.Sessions.DefaultWorkingDir)
+	c.Logging.File = expandPath(c.Logging.File)
+}
+
+// expandPath expands ~ in paths
+func expandPath(path string) string {
+	if strings.HasPrefix(path, "~/") {
+		home := os.Getenv("HOME")
+		if home == "" {
+			home = "."
+		}
+		return filepath.Join(home, path[2:])
+	}
+	return path
 }
 
 func saveDefault(cfg *Config, path string) error {

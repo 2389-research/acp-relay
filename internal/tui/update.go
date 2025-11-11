@@ -237,11 +237,15 @@ func (m Model) handleFocusedInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case FocusInputArea:
 		// Check if Enter should send message (Shift+Enter will still insert newline)
-		if msg.String() == "enter" && m.config.Input.SendOnEnter {
+		keyStr := msg.String()
+		sendOnEnter := m.config.Input.SendOnEnter
+		DebugLog("handleFocusedInput: key='%s', sendOnEnter=%v, match=%v", keyStr, sendOnEnter, keyStr == "enter")
+
+		if keyStr == "enter" && sendOnEnter {
 			DebugLog("handleFocusedInput: Enter pressed in InputArea, calling onSendMessage")
 			m = m.onSendMessage()
 		} else {
-			DebugLog("handleFocusedInput: Passing key '%s' to InputArea", msg.String())
+			DebugLog("handleFocusedInput: Passing key '%s' to InputArea", keyStr)
 			_, cmd = m.inputArea.Update(msg)
 		}
 	}
