@@ -106,7 +106,7 @@ func (cv *ChatView) formatMessage(msg *client.Message) string {
 
 	// Icon and timestamp
 	icon := msg.Type.Icon()
-	timestamp := msg.Timestamp.Format("15:04")
+	timestamp := msg.Timestamp.Format("[15:04:05]")
 	timestampStyled := cv.theme.DimStyle().Render(timestamp)
 
 	// Build the header line: icon + timestamp
@@ -115,18 +115,22 @@ func (cv *ChatView) formatMessage(msg *client.Message) string {
 	sb.WriteString(header)
 	sb.WriteString("\n")
 
-	// Format content based on message type
+	// Format content based on message type with color coding
 	var contentStyle = cv.theme.ChatViewStyle()
 
 	switch msg.Type {
 	case client.MessageTypeUser:
+		// User: Cyan
 		contentStyle = contentStyle.Foreground(cv.theme.UserMsg)
 	case client.MessageTypeAgent:
-		contentStyle = contentStyle.Foreground(cv.theme.AgentMsg)
+		// Agent: Green
+		contentStyle = contentStyle.Foreground(cv.theme.Success)
 	case client.MessageTypeError:
+		// Error: Red
 		contentStyle = cv.theme.ErrorStyle()
 	case client.MessageTypeSystem:
-		contentStyle = cv.theme.DimStyle()
+		// System: Yellow
+		contentStyle = contentStyle.Foreground(cv.theme.Warning)
 	}
 
 	// Render content

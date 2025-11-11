@@ -17,7 +17,7 @@ func FormatSystemMessage(msg *client.Message, th theme.Theme) string {
 
 	// Icon and timestamp
 	icon := msg.Type.Icon()
-	timestamp := msg.Timestamp.Format("15:04")
+	timestamp := msg.Timestamp.Format("[15:04:05]")
 	timestampStyled := th.DimStyle().Render(timestamp)
 
 	// Build the header line: icon + timestamp
@@ -49,8 +49,8 @@ func FormatSystemMessage(msg *client.Message, th theme.Theme) string {
 func formatAvailableCommands(msg *client.Message, th theme.Theme) string {
 	var sb strings.Builder
 
-	// Title
-	title := th.ChatViewStyle().Render("Available Commands Updated")
+	// Title with yellow color (system message)
+	title := th.ChatViewStyle().Foreground(th.Warning).Render("Available Commands Updated")
 	sb.WriteString(title)
 	sb.WriteString("\n")
 
@@ -92,16 +92,16 @@ func formatToolUse(msg *client.Message, th theme.Theme) string {
 	return content
 }
 
-// formatThinking renders thinking indicator.
+// formatThinking renders thinking indicator with yellow color (system message).
 func formatThinking(_ *client.Message, th theme.Theme) string {
-	content := th.DimStyle().Render("Agent is thinking...")
+	content := th.ChatViewStyle().Foreground(th.Warning).Render("Agent is thinking...")
 	return content
 }
 
-// formatThoughtChunk renders thought chunks (typically not shown in chat).
+// formatThoughtChunk renders thought chunks with yellow color (system message).
 func formatThoughtChunk(msg *client.Message, th theme.Theme) string {
 	// Thought chunks are typically shown in status bar, not in chat
-	// But if we do show them, display dimmed
-	content := th.DimStyle().Render(msg.Thought)
+	// But if we do show them, display with system color
+	content := th.ChatViewStyle().Foreground(th.Warning).Render(msg.Thought)
 	return content
 }

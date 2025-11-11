@@ -3,6 +3,7 @@
 package components
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -371,4 +372,203 @@ func TestChatView_MultipleTypingCycles(t *testing.T) {
 	assert.Len(t, cv.messages, 2)
 	assert.Equal(t, "First response", cv.messages[0].Content)
 	assert.Equal(t, "Second response", cv.messages[1].Content)
+}
+
+// Test timestamp formatting as [HH:MM:SS].
+func TestChatView_TimestampFormatting(t *testing.T) {
+	cv := NewChatView(80, 24, theme.DefaultTheme)
+
+	// Create a message with a known timestamp
+	timestamp := time.Date(2025, 11, 11, 14, 30, 45, 0, time.UTC)
+	msg := &client.Message{
+		SessionID: testSessionID,
+		Type:      client.MessageTypeUser,
+		Content:   "Test message",
+		Timestamp: timestamp,
+	}
+
+	formatted := cv.formatMessage(msg)
+
+	// Check that timestamp is formatted as [HH:MM:SS]
+	assert.Contains(t, formatted, "[14:30:45]", "Timestamp should be formatted as [HH:MM:SS]")
+}
+
+// Test color coding by message type.
+func TestChatView_ColorCodingByType(t *testing.T) {
+	cv := NewChatView(80, 24, theme.DefaultTheme)
+
+	tests := []struct {
+		name     string
+		msgType  client.MessageType
+		content  string
+		wantIcon string
+	}{
+		{
+			name:     "User message with cyan color",
+			msgType:  client.MessageTypeUser,
+			content:  "User message",
+			wantIcon: "👤",
+		},
+		{
+			name:     "Agent message with green color",
+			msgType:  client.MessageTypeAgent,
+			content:  "Agent message",
+			wantIcon: "🤖",
+		},
+		{
+			name:     "System message with yellow color",
+			msgType:  client.MessageTypeSystem,
+			content:  "System message",
+			wantIcon: "ℹ️",
+		},
+		{
+			name:     "Error message with red color",
+			msgType:  client.MessageTypeError,
+			content:  "Error message",
+			wantIcon: "⚠️",
+		},
+		{
+			name:     "Permission request with yellow color",
+			msgType:  client.MessageTypePermissionRequest,
+			content:  "Write",
+			wantIcon: "🔐",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := &client.Message{
+				SessionID: testSessionID,
+				Type:      tt.msgType,
+				Content:   tt.content,
+				Timestamp: time.Now(),
+			}
+
+			formatted := cv.formatMessage(msg)
+
+			// Check that icon is present
+			assert.Contains(t, formatted, tt.wantIcon, "Icon should be present in formatted message")
+
+			// Check that content is present
+			assert.Contains(t, formatted, tt.content, "Content should be present in formatted message")
+		})
+	}
+}
+
+// Test permission response formatting with different outcomes.
+func TestChatView_PermissionResponseFormatting(t *testing.T) {
+	cv := NewChatView(80, 24, theme.DefaultTheme)
+
+	tests := []struct {
+		name        string
+		outcome     string
+		wantIcon    string
+		wantStatus  string
+		toolContent string
+	}{
+		{
+			name:        "Allowed permission",
+			outcome:     "selected",
+			wantIcon:    "✅",
+			wantStatus:  "Allowed",
+			toolContent: "Write",
+		},
+		{
+			name:        "Denied permission",
+			outcome:     "rejected",
+			wantIcon:    "❌",
+			wantStatus:  "Denied",
+			toolContent: "Read",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := &client.Message{
+				SessionID: testSessionID,
+				Type:      client.MessageTypePermissionResponse,
+				Content:   tt.toolContent,
+				Timestamp: time.Now(),
+				RawInput: map[string]interface{}{
+					"outcome": tt.outcome,
+				},
+			}
+
+			formatted := cv.formatMessage(msg)
+
+			// Check icon and status
+			assert.Contains(t, formatted, tt.wantIcon, "Icon should be present")
+			assert.Contains(t, formatted, tt.wantStatus, "Status should be present")
+			assert.Contains(t, formatted, tt.toolContent, "Tool name should be present")
+		})
+	}
+}
+
+// Test command list formatting with bullet points.
+func TestChatView_CommandListFormatting(t *testing.T) {
+	cv := NewChatView(80, 24, theme.DefaultTheme)
+
+	tests := []struct {
+		name            string
+		commandCount    int
+		wantBullets     int
+		wantMoreMessage bool
+	}{
+		{
+			name:            "3 commands - show all",
+			commandCount:    3,
+			wantBullets:     3,
+			wantMoreMessage: false,
+		},
+		{
+			name:            "5 commands - show all",
+			commandCount:    5,
+			wantBullets:     5,
+			wantMoreMessage: false,
+		},
+		{
+			name:            "10 commands - show 5 + more message",
+			commandCount:    10,
+			wantBullets:     5,
+			wantMoreMessage: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := createCommandMessage(tt.commandCount)
+			formatted := cv.formatMessage(msg)
+			verifyCommandFormatting(t, formatted, tt.wantBullets, tt.wantMoreMessage, tt.commandCount)
+		})
+	}
+}
+
+func createCommandMessage(count int) *client.Message {
+	commands := make([]client.Command, count)
+	for i := 0; i < count; i++ {
+		commands[i] = client.Command{
+			Name:        fmt.Sprintf("/cmd%d", i+1),
+			Description: fmt.Sprintf("Description %d", i+1),
+		}
+	}
+	return &client.Message{
+		SessionID: testSessionID,
+		Type:      client.MessageTypeAvailableCommands,
+		Content:   "Commands updated",
+		Timestamp: time.Now(),
+		Commands:  commands,
+	}
+}
+
+func verifyCommandFormatting(t *testing.T, formatted string, wantBullets int, wantMore bool, commandCount int) {
+	t.Helper()
+	bulletCount := strings.Count(formatted, "•")
+	assert.Equal(t, wantBullets, bulletCount, "Should have correct number of bullet points")
+	if wantMore {
+		moreCount := commandCount - 5
+		assert.Contains(t, formatted, fmt.Sprintf("and %d more", moreCount), "Should show 'and X more' message")
+	} else {
+		assert.NotContains(t, formatted, "more", "Should not show 'and X more' message")
+	}
+	assert.Contains(t, formatted, "📋", "Should contain commands icon")
 }
