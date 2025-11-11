@@ -269,6 +269,75 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Agent finished responding
 				DebugLog("Update: session/complete received")
 
+			case "session/request_permission":
+				// Agent requesting permission to use a tool
+				DebugLog("Update: session/request_permission received")
+
+				// Extract request ID for response
+				requestID, hasID := response["id"]
+
+				// Extract toolCall information
+				if toolCall, ok := params["toolCall"].(map[string]interface{}); ok {
+					toolCallID, _ := toolCall["toolCallId"].(string)
+					rawInput, _ := toolCall["rawInput"].(map[string]interface{})
+
+					// Determine tool name from rawInput or params
+					toolName := "Unknown"
+					if name, ok := toolCall["name"].(string); ok {
+						toolName = name
+					}
+
+					// Create permission request message for display
+					if m.activeSessionID != "" {
+						permMsg := &client.Message{
+							SessionID:  m.activeSessionID,
+							Type:       client.MessageTypePermissionRequest,
+							ToolCallID: toolCallID,
+							Content:    toolName,
+							RawInput:   rawInput,
+							Timestamp:  time.Now(),
+						}
+						m.messageStore.AddMessage(permMsg)
+						m = m.updateChatView()
+					}
+
+					// Auto-approve permission (send response)
+					if hasID {
+						responseMsg := map[string]interface{}{
+							"jsonrpc": "2.0",
+							"id":      requestID,
+							"result": map[string]interface{}{
+								"outcome": map[string]interface{}{
+									"outcome":  "selected",
+									"optionId": "allow",
+								},
+							},
+						}
+
+						responseJSON, err := json.Marshal(responseMsg)
+						if err != nil {
+							DebugLog("Update: Failed to marshal permission response: %v", err)
+						} else if err := m.relayClient.Send(responseJSON); err != nil {
+							DebugLog("Update: Sending permission approval: %s", string(responseJSON))
+							DebugLog("Update: Failed to send permission response: %v", err)
+						} else if m.activeSessionID != "" {
+							// Add permission response message to display
+							respMsg := &client.Message{
+								SessionID:  m.activeSessionID,
+								Type:       client.MessageTypePermissionResponse,
+								ToolCallID: toolCallID,
+								Content:    toolName,
+								RawInput: map[string]interface{}{
+									"outcome": "allow",
+								},
+								Timestamp: time.Now(),
+							}
+							m.messageStore.AddMessage(respMsg)
+							m = m.updateChatView()
+						}
+					}
+				}
+
 			default:
 				// Unknown notification - log it
 				if m.activeSessionID != "" {

@@ -47,6 +47,14 @@ func (cv *ChatView) AddMessage(msg *client.Message) {
 func (cv *ChatView) formatMessage(msg *client.Message) string {
 	var sb strings.Builder
 
+	// Handle permission messages specially using the permission widget
+	if msg.Type == client.MessageTypePermissionRequest {
+		return FormatPermissionRequest(msg, cv.theme)
+	}
+	if msg.Type == client.MessageTypePermissionResponse {
+		return FormatPermissionResponse(msg, cv.theme)
+	}
+
 	// Icon and timestamp
 	icon := msg.Type.Icon()
 	timestamp := msg.Timestamp.Format("15:04")

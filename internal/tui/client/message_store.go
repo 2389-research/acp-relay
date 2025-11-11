@@ -15,6 +15,8 @@ const (
 	MessageTypeTool
 	MessageTypeSystem
 	MessageTypeError
+	MessageTypePermissionRequest
+	MessageTypePermissionResponse
 )
 
 func (mt MessageType) String() string {
@@ -29,6 +31,10 @@ func (mt MessageType) String() string {
 		return "System"
 	case MessageTypeError:
 		return "Error"
+	case MessageTypePermissionRequest:
+		return "PermissionRequest"
+	case MessageTypePermissionResponse:
+		return "PermissionResponse"
 	default:
 		return "Unknown"
 	}
@@ -46,16 +52,22 @@ func (mt MessageType) Icon() string {
 		return "ℹ️"
 	case MessageTypeError:
 		return "⚠️"
+	case MessageTypePermissionRequest:
+		return "🔐"
+	case MessageTypePermissionResponse:
+		return "✅"
 	default:
 		return "❓"
 	}
 }
 
 type Message struct {
-	SessionID string
-	Type      MessageType
-	Content   string
-	Timestamp time.Time
+	SessionID  string
+	Type       MessageType
+	Content    string
+	Timestamp  time.Time
+	ToolCallID string                 // For permission requests
+	RawInput   map[string]interface{} // For permission requests (file_path, content, etc.)
 }
 
 type MessageStore struct {

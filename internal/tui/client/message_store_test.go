@@ -78,3 +78,29 @@ func TestMessageStore_Clear(t *testing.T) {
 	messages := store.GetMessages("sess-1")
 	assert.Empty(t, messages)
 }
+
+func TestMessageType_PermissionRequest(t *testing.T) {
+	msg := &Message{
+		SessionID: "sess-1",
+		Type:      MessageTypePermissionRequest,
+		Content:   `{"toolCallId": "123", "toolName": "Write", "arguments": {"file_path": "/tmp/test.txt"}}`,
+		Timestamp: time.Now(),
+	}
+
+	assert.Equal(t, MessageTypePermissionRequest, msg.Type)
+	assert.Equal(t, "🔐", msg.Type.Icon())
+	assert.Equal(t, "PermissionRequest", msg.Type.String())
+}
+
+func TestMessageType_PermissionResponse(t *testing.T) {
+	msg := &Message{
+		SessionID: "sess-1",
+		Type:      MessageTypePermissionResponse,
+		Content:   `{"outcome": "allow", "toolName": "Write"}`,
+		Timestamp: time.Now(),
+	}
+
+	assert.Equal(t, MessageTypePermissionResponse, msg.Type)
+	assert.Equal(t, "✅", msg.Type.Icon())
+	assert.Equal(t, "PermissionResponse", msg.Type.String())
+}
