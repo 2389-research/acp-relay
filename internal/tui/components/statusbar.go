@@ -14,6 +14,7 @@ type StatusBar struct {
 	theme             theme.Theme
 	connectionStatus  string
 	activeSessionName string
+	customStatus      string // For temporary status messages like "Agent is thinking..."
 }
 
 func NewStatusBar(width int, t theme.Theme) *StatusBar {
@@ -31,6 +32,10 @@ func (s *StatusBar) SetConnectionStatus(status string) {
 
 func (s *StatusBar) SetActiveSession(name string) {
 	s.activeSessionName = name
+}
+
+func (s *StatusBar) SetStatus(status string) {
+	s.customStatus = status
 }
 
 func (s *StatusBar) SetSize(width int) {
@@ -59,11 +64,15 @@ func (s *StatusBar) View() string {
 
 	statusPart := fmt.Sprintf("[%s %s]", statusIcon, statusText)
 
-	// Session info
+	// Session info or custom status
 	var sessionPart string
-	if s.activeSessionName != "" {
+	switch {
+	case s.customStatus != "":
+		// Show custom status (takes priority)
+		sessionPart = s.customStatus
+	case s.activeSessionName != "":
 		sessionPart = fmt.Sprintf("Session: %s", s.activeSessionName)
-	} else {
+	default:
 		sessionPart = "No active session"
 	}
 

@@ -17,6 +17,10 @@ const (
 	MessageTypeError
 	MessageTypePermissionRequest
 	MessageTypePermissionResponse
+	MessageTypeAvailableCommands
+	MessageTypeToolUse
+	MessageTypeThinking
+	MessageTypeThoughtChunk
 )
 
 func (mt MessageType) String() string {
@@ -35,6 +39,14 @@ func (mt MessageType) String() string {
 		return "PermissionRequest"
 	case MessageTypePermissionResponse:
 		return "PermissionResponse"
+	case MessageTypeAvailableCommands:
+		return "AvailableCommands"
+	case MessageTypeToolUse:
+		return "ToolUse"
+	case MessageTypeThinking:
+		return "Thinking"
+	case MessageTypeThoughtChunk:
+		return "ThoughtChunk"
 	default:
 		return "Unknown"
 	}
@@ -56,9 +68,23 @@ func (mt MessageType) Icon() string {
 		return "🔐"
 	case MessageTypePermissionResponse:
 		return "✅"
+	case MessageTypeAvailableCommands:
+		return "📋"
+	case MessageTypeToolUse:
+		return "🔧"
+	case MessageTypeThinking:
+		return "💭"
+	case MessageTypeThoughtChunk:
+		return "💭"
 	default:
 		return "❓"
 	}
+}
+
+// Command represents a slash command with name and description.
+type Command struct {
+	Name        string
+	Description string
 }
 
 type Message struct {
@@ -68,6 +94,9 @@ type Message struct {
 	Timestamp  time.Time
 	ToolCallID string                 // For permission requests
 	RawInput   map[string]interface{} // For permission requests (file_path, content, etc.)
+	Commands   []Command              // For available commands updates
+	ToolName   string                 // For tool use messages
+	Thought    string                 // For thought chunk messages
 }
 
 type MessageStore struct {

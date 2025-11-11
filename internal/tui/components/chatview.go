@@ -55,6 +55,14 @@ func (cv *ChatView) formatMessage(msg *client.Message) string {
 		return FormatPermissionResponse(msg, cv.theme)
 	}
 
+	// Handle system messages using the system message widget
+	if msg.Type == client.MessageTypeAvailableCommands ||
+		msg.Type == client.MessageTypeToolUse ||
+		msg.Type == client.MessageTypeThinking ||
+		msg.Type == client.MessageTypeThoughtChunk {
+		return FormatSystemMessage(msg, cv.theme)
+	}
+
 	// Icon and timestamp
 	icon := msg.Type.Icon()
 	timestamp := msg.Timestamp.Format("15:04")

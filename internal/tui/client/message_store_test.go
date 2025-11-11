@@ -104,3 +104,67 @@ func TestMessageType_PermissionResponse(t *testing.T) {
 	assert.Equal(t, "✅", msg.Type.Icon())
 	assert.Equal(t, "PermissionResponse", msg.Type.String())
 }
+
+func TestMessageType_AvailableCommands(t *testing.T) {
+	commands := []Command{
+		{Name: "/help", Description: "Show help"},
+		{Name: "/clear", Description: "Clear screen"},
+	}
+
+	msg := &Message{
+		SessionID: "sess-1",
+		Type:      MessageTypeAvailableCommands,
+		Content:   "Commands updated",
+		Commands:  commands,
+		Timestamp: time.Now(),
+	}
+
+	assert.Equal(t, MessageTypeAvailableCommands, msg.Type)
+	assert.Equal(t, "📋", msg.Type.Icon())
+	assert.Equal(t, "AvailableCommands", msg.Type.String())
+	assert.Len(t, msg.Commands, 2)
+	assert.Equal(t, "/help", msg.Commands[0].Name)
+}
+
+func TestMessageType_ToolUse(t *testing.T) {
+	msg := &Message{
+		SessionID: "sess-1",
+		Type:      MessageTypeToolUse,
+		Content:   "Read",
+		ToolName:  "Read",
+		Timestamp: time.Now(),
+	}
+
+	assert.Equal(t, MessageTypeToolUse, msg.Type)
+	assert.Equal(t, "🔧", msg.Type.Icon())
+	assert.Equal(t, "ToolUse", msg.Type.String())
+	assert.Equal(t, "Read", msg.ToolName)
+}
+
+func TestMessageType_Thinking(t *testing.T) {
+	msg := &Message{
+		SessionID: "sess-1",
+		Type:      MessageTypeThinking,
+		Content:   "Agent is thinking...",
+		Timestamp: time.Now(),
+	}
+
+	assert.Equal(t, MessageTypeThinking, msg.Type)
+	assert.Equal(t, "💭", msg.Type.Icon())
+	assert.Equal(t, "Thinking", msg.Type.String())
+}
+
+func TestMessageType_ThoughtChunk(t *testing.T) {
+	msg := &Message{
+		SessionID: "sess-1",
+		Type:      MessageTypeThoughtChunk,
+		Content:   "I need to analyze the code structure first",
+		Thought:   "I need to analyze the code structure first",
+		Timestamp: time.Now(),
+	}
+
+	assert.Equal(t, MessageTypeThoughtChunk, msg.Type)
+	assert.Equal(t, "💭", msg.Type.Icon())
+	assert.Equal(t, "ThoughtChunk", msg.Type.String())
+	assert.Equal(t, "I need to analyze the code structure first", msg.Thought)
+}

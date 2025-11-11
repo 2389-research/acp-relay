@@ -45,6 +45,7 @@ type Model struct {
 	focusedArea     FocusArea
 	activeSessionID string
 	sidebarVisible  bool
+	currentThought  string // Accumulates agent_thought_chunk content
 }
 
 func NewModel(cfg *config.Config) Model {

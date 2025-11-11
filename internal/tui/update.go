@@ -269,6 +269,110 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Agent finished responding
 				DebugLog("Update: session/complete received")
 
+			case "session/update":
+				// Session status update (available_commands, tool_use, thinking, thought_chunk)
+				DebugLog("Update: session/update received")
+
+				// Extract the update object
+				if update, ok := params["update"].(map[string]interface{}); ok {
+					sessionUpdate, _ := update["sessionUpdate"].(string)
+					DebugLog("Update: sessionUpdate type=%s", sessionUpdate)
+
+					switch sessionUpdate {
+					case "available_commands_update":
+						// Extract available commands
+						if availableCommands, ok := update["availableCommands"].([]interface{}); ok {
+							commands := make([]client.Command, 0, len(availableCommands))
+							for _, cmd := range availableCommands {
+								if cmdMap, ok := cmd.(map[string]interface{}); ok {
+									name, _ := cmdMap["name"].(string)
+									desc, _ := cmdMap["description"].(string)
+									commands = append(commands, client.Command{
+										Name:        name,
+										Description: desc,
+									})
+								}
+							}
+
+							// Create system message with command count
+							var content string
+							if len(commands) <= 5 {
+								// Show all command names
+								cmdNames := make([]string, len(commands))
+								for i, cmd := range commands {
+									cmdNames[i] = cmd.Name
+								}
+								content = fmt.Sprintf("Commands updated: %v", cmdNames)
+							} else {
+								// Show count only
+								content = fmt.Sprintf("%d commands available", len(commands))
+							}
+
+							if m.activeSessionID != "" {
+								cmdMsg := &client.Message{
+									SessionID: m.activeSessionID,
+									Type:      client.MessageTypeAvailableCommands,
+									Content:   content,
+									Commands:  commands,
+									Timestamp: time.Now(),
+								}
+								m.messageStore.AddMessage(cmdMsg)
+								m = m.updateChatView()
+							}
+						}
+
+					case "tool_use":
+						// Extract tool name
+						if tool, ok := update["tool"].(map[string]interface{}); ok {
+							toolName, _ := tool["name"].(string)
+
+							if m.activeSessionID != "" {
+								toolMsg := &client.Message{
+									SessionID: m.activeSessionID,
+									Type:      client.MessageTypeToolUse,
+									Content:   fmt.Sprintf("Using tool: %s", toolName),
+									ToolName:  toolName,
+									Timestamp: time.Now(),
+								}
+								m.messageStore.AddMessage(toolMsg)
+								m = m.updateChatView()
+							}
+						}
+
+					case "agent_thinking":
+						// Create thinking indicator message
+						if m.activeSessionID != "" {
+							thinkingMsg := &client.Message{
+								SessionID: m.activeSessionID,
+								Type:      client.MessageTypeThinking,
+								Content:   "Agent is thinking...",
+								Timestamp: time.Now(),
+							}
+							m.messageStore.AddMessage(thinkingMsg)
+							m = m.updateChatView()
+
+							// Update status bar
+							m.statusBar.SetStatus("Agent is thinking...")
+						}
+
+					case "agent_thought_chunk":
+						// Extract thought text and accumulate
+						if content, ok := update["content"].(map[string]interface{}); ok {
+							if text, ok := content["text"].(string); ok {
+								// Accumulate thought text
+								m.currentThought += text
+
+								// Update status bar with truncated preview (first 50 chars)
+								preview := m.currentThought
+								if len(preview) > 50 {
+									preview = preview[:50] + "..."
+								}
+								m.statusBar.SetStatus(fmt.Sprintf("💭 %s", preview))
+							}
+						}
+					}
+				}
+
 			case "session/request_permission":
 				// Agent requesting permission to use a tool
 				DebugLog("Update: session/request_permission received")
