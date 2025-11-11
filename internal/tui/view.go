@@ -45,23 +45,9 @@ func (m Model) View() string {
 
 	// Overlay help if visible
 	if m.helpOverlay.IsVisible() {
-		// Create a base layer with the main view
-		baseStyle := lipgloss.NewStyle().
-			Width(m.width).
-			Height(m.height)
-
-		base := baseStyle.Render(fullView)
-
-		// Overlay the help on top
-		return lipgloss.Place(
-			m.width,
-			m.height,
-			lipgloss.Center,
-			lipgloss.Center,
-			m.helpOverlay.View(),
-			lipgloss.WithWhitespaceChars(" "),
-			lipgloss.WithWhitespaceForeground(m.theme.Background),
-		) + "\n" + base
+		// Render help overlay on top of the base view
+		// The help overlay already handles its own positioning and centering
+		return m.helpOverlay.View()
 	}
 
 	return fullView

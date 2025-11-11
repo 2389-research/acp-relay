@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gorilla/websocket"
 )
 
@@ -150,32 +149,6 @@ func (c *RelayClient) writeLoop() {
 				}
 				return
 			}
-		}
-	}
-}
-
-// Bubbletea message types for async communication
-
-type RelayMessageMsg struct {
-	Data []byte
-}
-
-type RelayErrorMsg struct {
-	Err error
-}
-
-type RelayDisconnectedMsg struct{}
-
-// WaitForMessage returns a Cmd that waits for the next message
-func (c *RelayClient) WaitForMessage() func() tea.Msg {
-	return func() tea.Msg {
-		select {
-		case msg := <-c.incoming:
-			return RelayMessageMsg{Data: msg}
-		case err := <-c.errors:
-			return RelayErrorMsg{Err: err}
-		case <-c.done:
-			return RelayDisconnectedMsg{}
 		}
 	}
 }

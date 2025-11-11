@@ -171,12 +171,12 @@ func (m Model) handleFocusedInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "up", "k":
 			m.sidebar.CursorUp()
-			m.onSessionSelect()
+			m = m.onSessionSelect()
 		case "down", "j":
 			m.sidebar.CursorDown()
-			m.onSessionSelect()
+			m = m.onSessionSelect()
 		case "enter":
-			m.onSessionSelect()
+			m = m.onSessionSelect()
 		case "n":
 			// TODO: Create new session
 		case "d":
@@ -192,7 +192,7 @@ func (m Model) handleFocusedInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case FocusInputArea:
 		// Check if Enter should send message (Shift+Enter will still insert newline)
 		if msg.String() == "enter" && m.config.Input.SendOnEnter {
-			m.onSendMessage()
+			m = m.onSendMessage()
 		} else {
 			_, cmd = m.inputArea.Update(msg)
 		}
@@ -202,26 +202,27 @@ func (m Model) handleFocusedInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // onSessionSelect updates the active session and loads its messages
-func (m *Model) onSessionSelect() {
+func (m Model) onSessionSelect() Model {
 	sess := m.sidebar.GetSelectedSession()
 	if sess == nil {
-		return
+		return m
 	}
 
 	m.activeSessionID = sess.ID
 	m.statusBar.SetActiveSession(sess.DisplayName)
-	m.updateChatView()
+	m = m.updateChatView()
+	return m
 }
 
 // onSendMessage sends the input area content as a message
-func (m *Model) onSendMessage() {
+func (m Model) onSendMessage() Model {
 	if m.activeSessionID == "" {
-		return
+		return m
 	}
 
 	content := m.inputArea.GetValue()
 	if content == "" {
-		return
+		return m
 	}
 
 	// Add user message to store
@@ -237,18 +238,21 @@ func (m *Model) onSendMessage() {
 	m.inputArea.Clear()
 
 	// Update chat view
-	m.updateChatView()
+	m = m.updateChatView()
 
 	// TODO: Send message to relay server
+
+	return m
 }
 
 // updateChatView refreshes the chat view with current session messages
-func (m *Model) updateChatView() {
+func (m Model) updateChatView() Model {
 	if m.activeSessionID == "" {
 		m.chatView.SetMessages([]*client.Message{})
-		return
+		return m
 	}
 
 	messages := m.messageStore.GetMessages(m.activeSessionID)
 	m.chatView.SetMessages(messages)
+	return m
 }

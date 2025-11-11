@@ -89,7 +89,7 @@ func DefaultConfig() *Config {
 			NewSession:    "n",
 			DeleteSession: "d",
 			RenameSession: "r",
-			SendMessage:   "ctrl+s",
+			SendMessage:   "enter",
 			Quit:          "ctrl+c",
 			Help:          "?",
 		},
