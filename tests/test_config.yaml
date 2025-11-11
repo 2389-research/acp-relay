@@ -9,11 +9,11 @@ server:
   management_host: "127.0.0.1"
 
 agent:
-  command: "/bin/cat"  # Simple test agent that echoes JSON
+  command: "python3"
   mode: "process"
-  args: []
+  args: ["/Users/harper/Public/src/2389/acp-relay/testdata/mock_agent.py"]
   env: {}
-  startup_timeout_seconds: 5
+  startup_timeout_seconds: 10
   max_concurrent_sessions: 10
 
 database:
