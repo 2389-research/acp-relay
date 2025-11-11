@@ -10,7 +10,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/google/uuid"
 	"github.com/harper/acp-relay/internal/tui/client"
 )
 
@@ -113,45 +112,105 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.waitForRelayMessage()
 		}
 
-		// Extract method and params
-		method, _ := response["method"].(string)
-		params, _ := response["params"].(map[string]interface{})
+		// Check if this is a response (has result/error) or notification (has method)
+		if method, hasMethod := response["method"].(string); hasMethod {
+			// This is a notification
+			params, _ := response["params"].(map[string]interface{})
+			DebugLog("Update: RelayMessageMsg - notification method=%s", method)
 
-		DebugLog("Update: RelayMessageMsg - method=%s", method)
+			switch method {
+			case "session/chunk":
+				// Agent is streaming a response chunk
+				if m.activeSessionID != "" {
+					if content, ok := params["content"].(string); ok {
+						agentMsg := &client.Message{
+							SessionID: m.activeSessionID,
+							Type:      client.MessageTypeAgent,
+							Content:   content,
+							Timestamp: time.Now(),
+						}
+						m.messageStore.AddMessage(agentMsg)
+						m = m.updateChatView()
+					}
+				}
 
-		// Route based on method
-		switch method {
-		case "session/chunk":
-			// Agent is streaming a response chunk
-			if m.activeSessionID != "" {
-				if content, ok := params["content"].(string); ok {
-					agentMsg := &client.Message{
+			case "session/complete":
+				// Agent finished responding
+				DebugLog("Update: session/complete received")
+
+			default:
+				// Unknown notification - log it
+				if m.activeSessionID != "" {
+					sysMsg := &client.Message{
 						SessionID: m.activeSessionID,
-						Type:      client.MessageTypeAgent,
-						Content:   content,
+						Type:      client.MessageTypeSystem,
+						Content:   fmt.Sprintf("[%s] %s", method, string(msg.Data)),
 						Timestamp: time.Now(),
 					}
-					m.messageStore.AddMessage(agentMsg)
+					m.messageStore.AddMessage(sysMsg)
 					m = m.updateChatView()
 				}
 			}
+		} else if result, hasResult := response["result"]; hasResult {
+			// This is a successful response
+			DebugLog("Update: RelayMessageMsg - response with result")
 
-		case "session/complete":
-			// Agent finished responding
-			DebugLog("Update: session/complete received")
-			// Could add a system message or update status
+			// Check if it's a session/new response
+			if resultMap, ok := result.(map[string]interface{}); ok {
+				if sessionID, ok := resultMap["sessionId"].(string); ok {
+					// Session created successfully!
+					DebugLog("Update: Session created with ID: %s", sessionID)
 
-		default:
-			// Unknown method or notification - log it
-			if m.activeSessionID != "" {
-				sysMsg := &client.Message{
-					SessionID: m.activeSessionID,
-					Type:      client.MessageTypeSystem,
-					Content:   fmt.Sprintf("[%s] %s", method, string(msg.Data)),
-					Timestamp: time.Now(),
+					// Create local session
+					workingDir := m.config.Sessions.DefaultWorkingDir
+					sessions := m.sessionManager.List()
+					displayName := fmt.Sprintf("Session %d", len(sessions)+1)
+
+					sess, err := m.sessionManager.Create(sessionID, workingDir, displayName)
+					if err != nil {
+						DebugLog("Update: Failed to create local session: %v", err)
+					} else {
+						// Update sidebar
+						m = m.refreshSidebar()
+
+						// Make it active
+						m.activeSessionID = sess.ID
+						m.statusBar.SetActiveSession(sess.DisplayName)
+
+						// Add welcome message
+						welcomeMsg := &client.Message{
+							SessionID: sessionID,
+							Type:      client.MessageTypeSystem,
+							Content:   fmt.Sprintf("Session created: %s\nWorking directory: %s", displayName, workingDir),
+							Timestamp: time.Now(),
+						}
+						m.messageStore.AddMessage(welcomeMsg)
+						m = m.updateChatView()
+
+						// Save sessions
+						dataDir := os.ExpandEnv("$HOME/.local/share/acp-tui")
+						if err := m.sessionManager.Save(dataDir); err != nil {
+							DebugLog("Update: Failed to save sessions: %v", err)
+						}
+					}
 				}
-				m.messageStore.AddMessage(sysMsg)
-				m = m.updateChatView()
+			}
+		} else if errorData, hasError := response["error"]; hasError {
+			// This is an error response
+			DebugLog("Update: RelayMessageMsg - response with error: %v", errorData)
+
+			if errorMap, ok := errorData.(map[string]interface{}); ok {
+				errorMsg := fmt.Sprintf("Error: %v", errorMap["message"])
+				if m.activeSessionID != "" {
+					msg := &client.Message{
+						SessionID: m.activeSessionID,
+						Type:      client.MessageTypeError,
+						Content:   errorMsg,
+						Timestamp: time.Now(),
+					}
+					m.messageStore.AddMessage(msg)
+					m = m.updateChatView()
+				}
 			}
 		}
 
@@ -434,52 +493,45 @@ func (m Model) refreshSidebar() Model {
 	return m
 }
 
-// onCreateSession creates a new session and makes it active
+// onCreateSession creates a new session on the relay server
 func (m Model) onCreateSession() Model {
-	// Generate unique session ID
-	sessionID := "sess_" + uuid.New().String()[:8]
+	if !m.relayClient.IsConnected() {
+		DebugLog("onCreateSession: Not connected to relay")
+		// Could show error message
+		return m
+	}
 
 	// Use config default working directory
 	workingDir := m.config.Sessions.DefaultWorkingDir
 
-	// Create display name with counter
-	sessions := m.sessionManager.List()
-	displayName := fmt.Sprintf("Session %d", len(sessions)+1)
+	// Call relay server to create session
+	msgID := atomic.AddUint64(&messageIDCounter, 1)
 
-	// Create the session
-	sess, err := m.sessionManager.Create(sessionID, workingDir, displayName)
+	request := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"method":  "session/new",
+		"params": map[string]interface{}{
+			"workingDirectory": workingDir,
+		},
+		"id": msgID,
+	}
+
+	jsonMsg, err := json.Marshal(request)
 	if err != nil {
-		DebugLog("onCreateSession: Failed to create session: %v", err)
+		DebugLog("onCreateSession: JSON marshal failed: %v", err)
 		return m
 	}
 
-	DebugLog("onCreateSession: Created session %s (%s)", sess.ID, sess.DisplayName)
+	DebugLog("onCreateSession: Sending session/new request (id=%d): %s", msgID, string(jsonMsg))
 
-	// Update sidebar with new session list
-	m = m.refreshSidebar()
-
-	// Make it the active session
-	m.activeSessionID = sess.ID
-	m.statusBar.SetActiveSession(sess.DisplayName)
-
-	// Clear chat view for new session
-	m = m.updateChatView()
-
-	// Add welcome message
-	welcomeMsg := &client.Message{
-		SessionID: sessionID,
-		Type:      client.MessageTypeSystem,
-		Content:   fmt.Sprintf("Session created: %s\nWorking directory: %s", displayName, workingDir),
-		Timestamp: time.Now(),
+	if err := m.relayClient.Send(jsonMsg); err != nil {
+		DebugLog("onCreateSession: Send failed: %v", err)
+		return m
 	}
-	m.messageStore.AddMessage(welcomeMsg)
-	m = m.updateChatView()
 
-	// Save sessions to disk
-	dataDir := os.ExpandEnv("$HOME/.local/share/acp-tui")
-	if err := m.sessionManager.Save(dataDir); err != nil {
-		DebugLog("onCreateSession: Failed to save sessions: %v", err)
-	}
+	// Store the display name temporarily so we can use it when we get the response
+	// For now, we'll create the local session when we receive the response
+	// TODO: Store pending session creation state
 
 	return m
 }
