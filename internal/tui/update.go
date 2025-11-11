@@ -254,20 +254,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Agent is streaming a response chunk
 				if m.activeSessionID != "" {
 					if content, ok := params["content"].(string); ok {
-						agentMsg := &client.Message{
-							SessionID: m.activeSessionID,
-							Type:      client.MessageTypeAgent,
-							Content:   content,
-							Timestamp: time.Now(),
-						}
-						m.messageStore.AddMessage(agentMsg)
-						m = m.updateChatView()
+						// Accumulate response for typing indicator
+						m.currentResponse += content
+
+						// Update typing indicator with accumulated text
+						m.chatView.UpdateTyping(m.currentResponse)
+
+						// Advance progress bar
+						m.statusBar.AdvanceProgress(2.0)
 					}
 				}
 
 			case "session/complete":
 				// Agent finished responding
 				DebugLog("Update: session/complete received")
+
+				// Stop typing indicator (adds final message)
+				m.chatView.StopTyping()
+				m.currentResponse = ""
+
+				// Hide progress bar
+				m.statusBar.HideProgress()
 
 			case "session/update":
 				// Session status update (available_commands, tool_use, thinking, thought_chunk)
@@ -368,6 +375,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 									preview = preview[:50] + "..."
 								}
 								m.statusBar.SetStatus(fmt.Sprintf("💭 %s", preview))
+
+								// Advance progress bar
+								m.statusBar.AdvanceProgress(1.0)
 							}
 						}
 					}
@@ -778,6 +788,11 @@ func (m Model) onSendMessage() Model {
 
 	// Update chat view
 	m = m.updateChatView()
+
+	// Show progress bar and start typing indicator
+	m.statusBar.ShowProgress()
+	m.chatView.StartTyping()
+	m.currentResponse = ""
 
 	// Send message to relay server
 	if m.relayClient.IsConnected() {

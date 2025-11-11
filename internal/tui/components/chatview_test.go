@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testSessionID = "test-session"
+
 func TestNewChatView(t *testing.T) {
 	width, height := 80, 24
 	th := theme.DefaultTheme
@@ -30,7 +32,7 @@ func TestChatView_AddMessage(t *testing.T) {
 	cv := NewChatView(80, 24, theme.DefaultTheme)
 
 	msg := &client.Message{
-		SessionID: "test-session",
+		SessionID: testSessionID,
 		Type:      client.MessageTypeUser,
 		Content:   "Hello, world!",
 		Timestamp: time.Now(),
@@ -43,7 +45,7 @@ func TestChatView_AddMessage(t *testing.T) {
 
 	// Add another message
 	msg2 := &client.Message{
-		SessionID: "test-session",
+		SessionID: testSessionID,
 		Type:      client.MessageTypeAgent,
 		Content:   "Hi there!",
 		Timestamp: time.Now(),
@@ -61,13 +63,13 @@ func TestChatView_SetMessages(t *testing.T) {
 
 	messages := []*client.Message{
 		{
-			SessionID: "test-session",
+			SessionID: testSessionID,
 			Type:      client.MessageTypeUser,
 			Content:   "Message 1",
 			Timestamp: time.Now(),
 		},
 		{
-			SessionID: "test-session",
+			SessionID: testSessionID,
 			Type:      client.MessageTypeAgent,
 			Content:   "Message 2",
 			Timestamp: time.Now(),
@@ -83,7 +85,7 @@ func TestChatView_SetMessages(t *testing.T) {
 	// SetMessages should replace, not append
 	newMessages := []*client.Message{
 		{
-			SessionID: "test-session",
+			SessionID: testSessionID,
 			Type:      client.MessageTypeTool,
 			Content:   "New message",
 			Timestamp: time.Now(),
@@ -140,7 +142,7 @@ func TestChatView_FormatMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			msg := &client.Message{
-				SessionID: "test-session",
+				SessionID: testSessionID,
 				Type:      tt.msgType,
 				Content:   tt.content,
 				Timestamp: time.Now(),
@@ -173,13 +175,13 @@ func TestChatView_ViewWithMessages(t *testing.T) {
 
 	messages := []*client.Message{
 		{
-			SessionID: "test-session",
+			SessionID: testSessionID,
 			Type:      client.MessageTypeUser,
 			Content:   "Hello!",
 			Timestamp: time.Now(),
 		},
 		{
-			SessionID: "test-session",
+			SessionID: testSessionID,
 			Type:      client.MessageTypeAgent,
 			Content:   "Hi there!",
 			Timestamp: time.Now(),
@@ -211,7 +213,7 @@ func TestChatView_MultilineContent(t *testing.T) {
 	cv := NewChatView(80, 24, theme.DefaultTheme)
 
 	msg := &client.Message{
-		SessionID: "test-session",
+		SessionID: testSessionID,
 		Type:      client.MessageTypeAgent,
 		Content:   "Line 1\nLine 2\nLine 3",
 		Timestamp: time.Now(),
@@ -233,7 +235,7 @@ func TestChatView_LongContent(t *testing.T) {
 	longContent := strings.Repeat("This is a very long message. ", 20)
 
 	msg := &client.Message{
-		SessionID: "test-session",
+		SessionID: testSessionID,
 		Type:      client.MessageTypeUser,
 		Content:   longContent,
 		Timestamp: time.Now(),
@@ -244,4 +246,129 @@ func TestChatView_LongContent(t *testing.T) {
 	// Should not panic
 	view := cv.View()
 	assert.NotEmpty(t, view)
+}
+
+func TestChatView_TypingIndicator(t *testing.T) {
+	cv := NewChatView(80, 24, theme.DefaultTheme)
+	cv.sessionID = testSessionID // Set session ID for creating messages
+
+	// Initially, typing should not be active
+	view := cv.View()
+	assert.NotContains(t, view, "▊")
+
+	// Start typing
+	cv.StartTyping()
+	view = cv.View()
+	// Blinking cursor should appear
+	assert.Contains(t, view, "▊")
+
+	// Update typing text
+	cv.UpdateTyping("Agent is responding...")
+	view = cv.View()
+	assert.Contains(t, view, "Agent is responding...")
+	assert.Contains(t, view, "▊")
+
+	// Stop typing (should add final message to messages list)
+	cv.StopTyping()
+	assert.Len(t, cv.messages, 1)
+	assert.Equal(t, "Agent is responding...", cv.messages[0].Content)
+
+	// Typing indicator should be gone
+	view = cv.View()
+	// The message is now in the chat, but the typing indicator should be gone
+	assert.Contains(t, view, "Agent is responding...")
+}
+
+func TestChatView_TypingIndicatorStates(t *testing.T) {
+	cv := NewChatView(80, 24, theme.DefaultTheme)
+
+	// Not typing initially
+	assert.False(t, cv.agentTyping)
+	assert.Equal(t, "", cv.typingText)
+
+	// Start typing
+	cv.StartTyping()
+	assert.True(t, cv.agentTyping)
+
+	// Update typing text multiple times
+	cv.UpdateTyping("Thinking")
+	assert.Equal(t, "Thinking", cv.typingText)
+
+	cv.UpdateTyping("Thinking...")
+	assert.Equal(t, "Thinking...", cv.typingText)
+
+	cv.UpdateTyping("Thinking... done")
+	assert.Equal(t, "Thinking... done", cv.typingText)
+
+	// Stop typing
+	cv.StopTyping()
+	assert.False(t, cv.agentTyping)
+	assert.Equal(t, "", cv.typingText)
+}
+
+func TestChatView_TypingWithMessages(t *testing.T) {
+	cv := NewChatView(80, 24, theme.DefaultTheme)
+	cv.sessionID = testSessionID // Set session ID for creating messages
+
+	// Add some existing messages
+	msg1 := &client.Message{
+		SessionID: testSessionID,
+		Type:      client.MessageTypeUser,
+		Content:   "Hello!",
+		Timestamp: time.Now(),
+	}
+	cv.AddMessage(msg1)
+
+	// Start typing
+	cv.StartTyping()
+	cv.UpdateTyping("Processing your request...")
+
+	view := cv.View()
+
+	// Should contain existing message and typing indicator
+	assert.Contains(t, view, "Hello!")
+	assert.Contains(t, view, "Processing your request...")
+	assert.Contains(t, view, "▊")
+
+	// Stop typing - should add agent message
+	cv.StopTyping()
+
+	// Should have 2 messages now (user + agent)
+	assert.Len(t, cv.messages, 2)
+	assert.Equal(t, client.MessageTypeUser, cv.messages[0].Type)
+	assert.Equal(t, client.MessageTypeAgent, cv.messages[1].Type)
+	assert.Equal(t, "Processing your request...", cv.messages[1].Content)
+}
+
+func TestChatView_StopTypingWithEmptyText(t *testing.T) {
+	cv := NewChatView(80, 24, theme.DefaultTheme)
+
+	// Start typing but don't update text
+	cv.StartTyping()
+	cv.StopTyping()
+
+	// Should not add an empty message
+	assert.Len(t, cv.messages, 0)
+}
+
+func TestChatView_MultipleTypingCycles(t *testing.T) {
+	cv := NewChatView(80, 24, theme.DefaultTheme)
+	cv.sessionID = testSessionID // Set session ID for creating messages
+
+	// First typing cycle
+	cv.StartTyping()
+	cv.UpdateTyping("First response")
+	cv.StopTyping()
+
+	assert.Len(t, cv.messages, 1)
+	assert.Equal(t, "First response", cv.messages[0].Content)
+
+	// Second typing cycle
+	cv.StartTyping()
+	cv.UpdateTyping("Second response")
+	cv.StopTyping()
+
+	assert.Len(t, cv.messages, 2)
+	assert.Equal(t, "First response", cv.messages[0].Content)
+	assert.Equal(t, "Second response", cv.messages[1].Content)
 }

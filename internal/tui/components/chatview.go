@@ -5,19 +5,24 @@ package components
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/harper/acp-relay/internal/tui/client"
 	"github.com/harper/acp-relay/internal/tui/theme"
 )
 
 type ChatView struct {
-	width    int
-	height   int
-	theme    theme.Theme
-	viewport viewport.Model
-	messages []*client.Message
+	width       int
+	height      int
+	theme       theme.Theme
+	viewport    viewport.Model
+	messages    []*client.Message
+	agentTyping bool
+	typingText  string
+	sessionID   string // For creating messages when typing stops
 }
 
 func NewChatView(width, height int, t theme.Theme) *ChatView {
@@ -35,13 +40,49 @@ func NewChatView(width, height int, t theme.Theme) *ChatView {
 
 func (cv *ChatView) SetMessages(messages []*client.Message) {
 	cv.messages = messages
+	// Update sessionID from messages if available
+	if len(messages) > 0 {
+		cv.sessionID = messages[0].SessionID
+	}
 	cv.updateViewport()
 }
 
 func (cv *ChatView) AddMessage(msg *client.Message) {
 	cv.messages = append(cv.messages, msg)
+	// Update sessionID from message
+	if cv.sessionID == "" {
+		cv.sessionID = msg.SessionID
+	}
 	cv.updateViewport()
 	cv.scrollToBottom()
+}
+
+func (cv *ChatView) StartTyping() {
+	cv.agentTyping = true
+	cv.typingText = ""
+	cv.updateViewport()
+}
+
+func (cv *ChatView) UpdateTyping(text string) {
+	cv.typingText = text
+	cv.updateViewport()
+}
+
+func (cv *ChatView) StopTyping() {
+	cv.agentTyping = false
+	// Add final message if there's typing text
+	if cv.typingText != "" {
+		msg := &client.Message{
+			SessionID: cv.sessionID,
+			Type:      client.MessageTypeAgent,
+			Content:   cv.typingText,
+			Timestamp: time.Now(),
+		}
+		cv.messages = append(cv.messages, msg)
+		cv.typingText = ""
+		cv.updateViewport()
+		cv.scrollToBottom()
+	}
 }
 
 func (cv *ChatView) formatMessage(msg *client.Message) string {
@@ -97,7 +138,7 @@ func (cv *ChatView) formatMessage(msg *client.Message) string {
 }
 
 func (cv *ChatView) updateViewport() {
-	if len(cv.messages) == 0 {
+	if len(cv.messages) == 0 && !cv.agentTyping {
 		cv.viewport.SetContent(cv.theme.DimStyle().Render("No messages yet"))
 		return
 	}
@@ -111,7 +152,30 @@ func (cv *ChatView) updateViewport() {
 		}
 	}
 
+	// Add typing indicator if agent is typing
+	if cv.agentTyping {
+		if len(cv.messages) > 0 {
+			sb.WriteString("\n\n")
+		}
+		sb.WriteString(cv.renderTypingIndicator())
+	}
+
 	cv.viewport.SetContent(sb.String())
+}
+
+// renderTypingIndicator renders the typing indicator with blinking cursor.
+func (cv *ChatView) renderTypingIndicator() string {
+	// Create blinking cursor style using Lipgloss
+	cursor := lipgloss.NewStyle().Blink(true).Render("▊")
+
+	typingLine := fmt.Sprintf("%s %s", cv.typingText, cursor)
+
+	// Style with agent color
+	styled := cv.theme.ChatViewStyle().
+		Foreground(cv.theme.AgentMsg).
+		Render(typingLine)
+
+	return styled
 }
 
 func (cv *ChatView) scrollToBottom() {
@@ -119,7 +183,7 @@ func (cv *ChatView) scrollToBottom() {
 }
 
 func (cv *ChatView) View() string {
-	if len(cv.messages) == 0 {
+	if len(cv.messages) == 0 && !cv.agentTyping {
 		return cv.theme.ChatViewStyle().
 			Width(cv.width - 2).
 			Height(cv.height - 2).

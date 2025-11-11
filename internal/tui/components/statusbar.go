@@ -15,6 +15,8 @@ type StatusBar struct {
 	connectionStatus  string
 	activeSessionName string
 	customStatus      string // For temporary status messages like "Agent is thinking..."
+	progressVisible   bool
+	progressValue     float64
 }
 
 func NewStatusBar(width int, t theme.Theme) *StatusBar {
@@ -40,6 +42,23 @@ func (s *StatusBar) SetStatus(status string) {
 
 func (s *StatusBar) SetSize(width int) {
 	s.width = width
+}
+
+func (s *StatusBar) ShowProgress() {
+	s.progressVisible = true
+	s.progressValue = 0.0
+}
+
+func (s *StatusBar) HideProgress() {
+	s.progressVisible = false
+}
+
+func (s *StatusBar) AdvanceProgress(amount float64) {
+	s.progressValue += amount
+	// Wrap at 100.0
+	if s.progressValue >= 100.0 {
+		s.progressValue = float64(int(s.progressValue) % 100)
+	}
 }
 
 func (s *StatusBar) View() string {
@@ -97,9 +116,36 @@ func (s *StatusBar) View() string {
 	spacer := strings.Repeat(" ", padding)
 	fullContent := fmt.Sprintf("%s%s| %s", leftContent, spacer, shortcuts)
 
-	return s.theme.StatusBarStyle().
+	statusLine := s.theme.StatusBarStyle().
 		Width(s.width - 2).
 		Render(fullContent)
+
+	// Add progress bar below status line if visible
+	if s.progressVisible {
+		progressBar := s.renderProgressBar()
+		return statusLine + "\n" + progressBar
+	}
+
+	return statusLine
+}
+
+// renderProgressBar renders a 40-character width progress bar using █ and ░ characters.
+func (s *StatusBar) renderProgressBar() string {
+	const barWidth = 40
+	filledWidth := int((s.progressValue / 100.0) * float64(barWidth))
+	emptyWidth := barWidth - filledWidth
+
+	filled := strings.Repeat("█", filledWidth)
+	empty := strings.Repeat("░", emptyWidth)
+
+	progressBar := filled + empty
+
+	// Style the progress bar with primary color
+	styledBar := s.theme.StatusBarStyle().
+		Foreground(s.theme.Primary).
+		Render(progressBar)
+
+	return styledBar
 }
 
 // stripAnsiForWidth removes ANSI codes to calculate actual display width.

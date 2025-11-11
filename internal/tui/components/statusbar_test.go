@@ -163,3 +163,118 @@ func stripAnsiCodes(s string) string {
 
 	return result.String()
 }
+
+func TestStatusBar_ProgressBar(t *testing.T) {
+	sb := NewStatusBar(80, theme.DefaultTheme)
+
+	// Initially, progress should not be visible
+	view := sb.View()
+	assert.NotContains(t, view, "█")
+	assert.NotContains(t, view, "░")
+
+	// Show progress
+	sb.ShowProgress()
+	view = sb.View()
+	// Progress bar should appear (even at 0%)
+	plainText := stripAnsiCodes(view)
+	assert.Contains(t, plainText, "░")
+
+	// Advance progress
+	sb.AdvanceProgress(25.0)
+	view = sb.View()
+	plainText = stripAnsiCodes(view)
+	assert.Contains(t, plainText, "█")
+	assert.Contains(t, plainText, "░")
+
+	// Hide progress
+	sb.HideProgress()
+	view = sb.View()
+	assert.NotContains(t, view, "█")
+	assert.NotContains(t, view, "░")
+}
+
+func TestStatusBar_ProgressAdvancement(t *testing.T) {
+	sb := NewStatusBar(80, theme.DefaultTheme)
+	sb.ShowProgress()
+
+	// Advance by 10%
+	sb.AdvanceProgress(10.0)
+	assert.Equal(t, 10.0, sb.progressValue)
+
+	// Advance by another 15%
+	sb.AdvanceProgress(15.0)
+	assert.Equal(t, 25.0, sb.progressValue)
+
+	// Advance by 80% (should wrap at 100)
+	sb.AdvanceProgress(80.0)
+	assert.Equal(t, 5.0, sb.progressValue) // 25 + 80 = 105, wraps to 5
+}
+
+func TestStatusBar_ProgressWrapping(t *testing.T) {
+	sb := NewStatusBar(80, theme.DefaultTheme)
+	sb.ShowProgress()
+
+	// Set progress to 95%
+	sb.AdvanceProgress(95.0)
+	assert.Equal(t, 95.0, sb.progressValue)
+
+	// Advance by 10% (should wrap)
+	sb.AdvanceProgress(10.0)
+	assert.Equal(t, 5.0, sb.progressValue) // 95 + 10 = 105, wraps to 5
+
+	// Advance by 100% (should wrap to 5 again)
+	sb.AdvanceProgress(100.0)
+	assert.Equal(t, 5.0, sb.progressValue) // 5 + 100 = 105, wraps to 5
+}
+
+func TestStatusBar_ProgressBarRendering(t *testing.T) {
+	tests := []struct {
+		name           string
+		progressValue  float64
+		expectedFilled int
+		expectedEmpty  int
+	}{
+		{
+			name:           "0% progress",
+			progressValue:  0.0,
+			expectedFilled: 0,
+			expectedEmpty:  40,
+		},
+		{
+			name:           "25% progress",
+			progressValue:  25.0,
+			expectedFilled: 10,
+			expectedEmpty:  30,
+		},
+		{
+			name:           "50% progress",
+			progressValue:  50.0,
+			expectedFilled: 20,
+			expectedEmpty:  20,
+		},
+		{
+			name:           "100% progress",
+			progressValue:  100.0,
+			expectedFilled: 40,
+			expectedEmpty:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sb := NewStatusBar(80, theme.DefaultTheme)
+			sb.ShowProgress()
+			sb.progressValue = tt.progressValue
+
+			view := sb.View()
+			plainText := stripAnsiCodes(view)
+
+			// Count filled and empty characters
+			filledCount := strings.Count(plainText, "█")
+			emptyCount := strings.Count(plainText, "░")
+
+			assert.Equal(t, tt.expectedFilled, filledCount, "filled count mismatch")
+			assert.Equal(t, tt.expectedEmpty, emptyCount, "empty count mismatch")
+		})
+	}
+}

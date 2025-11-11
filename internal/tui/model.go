@@ -46,6 +46,7 @@ type Model struct {
 	activeSessionID string
 	sidebarVisible  bool
 	currentThought  string // Accumulates agent_thought_chunk content
+	currentResponse string // Accumulates session/chunk content for typing indicator
 }
 
 func NewModel(cfg *config.Config) Model {
