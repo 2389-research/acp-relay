@@ -188,13 +188,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_ = m.relayClient.Close()
 			}
 
-			// Save sessions before quitting
-			dataDir := os.ExpandEnv("$HOME/.local/share/acp-tui")
-			if err := m.sessionManager.Save(dataDir); err != nil {
-				DebugLog("Quit: Failed to save sessions: %v", err)
-			} else {
-				DebugLog("Quit: Saved %d sessions", len(m.sessionManager.List()))
-			}
+			// Don't save sessions to disk - relay is the source of truth
 
 			return m, tea.Quit
 

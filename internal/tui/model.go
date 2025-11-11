@@ -3,8 +3,6 @@
 package tui
 
 import (
-	"os"
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/harper/acp-relay/internal/tui/client"
 	"github.com/harper/acp-relay/internal/tui/components"
@@ -92,17 +90,9 @@ func NewModel(cfg *config.Config, debugMode bool) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	// Load saved sessions from SessionManager
-	dataDir := os.ExpandEnv("$HOME/.local/share/acp-tui")
-	if err := m.sessionManager.Load(dataDir); err != nil {
-		DebugLog("Init: Failed to load sessions: %v", err)
-	} else {
-		DebugLog("Init: Loaded %d sessions", len(m.sessionManager.List()))
-	}
-
-	// Update sidebar with loaded sessions
-	sessions := m.sessionManager.List()
-	m.sidebar.SetSessions(sessions)
+	// Don't load stale sessions from disk - relay API is the source of truth
+	// SessionManager will be populated when we fetch from relay API
+	DebugLog("Init: Starting TUI, will fetch sessions from relay API")
 
 	// Initialize input area blinking cursor and fetch sessions from relay API
 	return tea.Batch(
