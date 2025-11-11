@@ -14,18 +14,18 @@ import (
 
 // Message types for session selection.
 type ShowSessionSelectionMsg struct {
-	Sessions []client.DBSession
+	Sessions []client.ManagementSession
 }
 
 type SessionSelectedMsg struct {
-	Session client.DBSession
+	Session client.ManagementSession
 }
 
 type CreateNewSessionMsg struct{}
 
 // SessionSelectionScreen is the modal dialog for session selection.
 type SessionSelectionScreen struct {
-	sessions      []client.DBSession
+	sessions      []client.ManagementSession
 	selectedIndex int
 	width         int
 	height        int
@@ -33,7 +33,7 @@ type SessionSelectionScreen struct {
 }
 
 // NewSessionSelectionScreen creates a new session selection screen.
-func NewSessionSelectionScreen(sessions []client.DBSession, width, height int, th theme.Theme) *SessionSelectionScreen {
+func NewSessionSelectionScreen(sessions []client.ManagementSession, width, height int, th theme.Theme) *SessionSelectionScreen {
 	selectedIndex := 0
 	if len(sessions) == 0 {
 		selectedIndex = -1

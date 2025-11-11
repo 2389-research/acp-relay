@@ -40,7 +40,6 @@ type Model struct {
 	relayClient    *client.RelayClient
 	sessionManager *client.SessionManager
 	messageStore   *client.MessageStore
-	dbClient       *client.DatabaseClient
 
 	// UI state
 	focusedArea     FocusArea
@@ -68,14 +67,6 @@ func NewModel(cfg *config.Config, debugMode bool) Model {
 	sessionManager := client.NewSessionManager()
 	messageStore := client.NewMessageStore(1000) // 1000 message history limit
 
-	// Initialize database client (for reading relay server database)
-	dbClient, err := client.NewDatabaseClient("")
-	if err != nil {
-		DebugLog("NewModel: Failed to initialize database client: %v", err)
-		// Continue without database support
-		dbClient = nil
-	}
-
 	m := Model{
 		config:          cfg,
 		theme:           th,
@@ -88,7 +79,6 @@ func NewModel(cfg *config.Config, debugMode bool) Model {
 		relayClient:     relayClient,
 		sessionManager:  sessionManager,
 		messageStore:    messageStore,
-		dbClient:        dbClient,
 		focusedArea:     FocusInputArea,
 		activeSessionID: "",
 		sidebarVisible:  true,
@@ -114,28 +104,31 @@ func (m Model) Init() tea.Cmd {
 	sessions := m.sessionManager.List()
 	m.sidebar.SetSessions(sessions)
 
-	// Query database for all sessions to show in modal
-	var dbSessions []client.DBSession
-	if m.dbClient != nil {
-		var err error
-		dbSessions, err = m.dbClient.GetAllSessions()
-		if err != nil {
-			DebugLog("Init: Failed to query database sessions: %v", err)
-			// Continue with empty sessions list
-			dbSessions = []client.DBSession{}
-		} else {
-			DebugLog("Init: Loaded %d sessions from database", len(dbSessions))
-		}
-	}
-
-	// Initialize input area blinking cursor and show session selection modal
+	// Initialize input area blinking cursor and fetch sessions from relay API
 	return tea.Batch(
 		m.inputArea.Init(),
-		func() tea.Msg {
-			// Import the screens package message type
-			return showSessionSelectionMsg{Sessions: dbSessions}
-		},
+		m.fetchSessionsFromRelay(),
 	)
+}
+
+// fetchSessionsFromRelay queries the management API for all sessions.
+func (m Model) fetchSessionsFromRelay() tea.Cmd {
+	return func() tea.Msg {
+		managementURL := m.config.Relay.ManagementURL
+		if managementURL == "" {
+			DebugLog("fetchSessionsFromRelay: No management URL configured")
+			return showSessionSelectionMsg{Sessions: []client.ManagementSession{}}
+		}
+
+		sessions, err := client.GetSessionsFromManagementAPI(managementURL)
+		if err != nil {
+			DebugLog("fetchSessionsFromRelay: Failed to fetch sessions: %v", err)
+			return showSessionSelectionMsg{Sessions: []client.ManagementSession{}}
+		}
+
+		DebugLog("fetchSessionsFromRelay: Fetched %d sessions from relay", len(sessions))
+		return showSessionSelectionMsg{Sessions: sessions}
+	}
 }
 
 // connectToRelay returns a command that connects to the relay server.

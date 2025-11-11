@@ -15,7 +15,7 @@ import (
 // TestSessionSelectionScreen_NavigationUpDown tests arrow key navigation.
 func TestSessionSelectionScreen_NavigationUpDown(t *testing.T) {
 	th := theme.DefaultTheme
-	sessions := []client.DBSession{
+	sessions := []client.ManagementSession{
 		{ID: "session-1", WorkingDirectory: "/tmp/dir1", CreatedAt: time.Now(), IsActive: true},
 		{ID: "session-2", WorkingDirectory: "/tmp/dir2", CreatedAt: time.Now(), IsActive: false},
 		{ID: "session-3", WorkingDirectory: "/tmp/dir3", CreatedAt: time.Now(), IsActive: true},
@@ -67,7 +67,7 @@ func TestSessionSelectionScreen_NavigationUpDown(t *testing.T) {
 // TestSessionSelectionScreen_NavigationEmptySessions tests navigation with no sessions.
 func TestSessionSelectionScreen_NavigationEmptySessions(t *testing.T) {
 	th := theme.DefaultTheme
-	sessions := []client.DBSession{}
+	sessions := []client.ManagementSession{}
 
 	screen := NewSessionSelectionScreen(sessions, 80, 24, th)
 
@@ -93,7 +93,7 @@ func TestSessionSelectionScreen_NavigationEmptySessions(t *testing.T) {
 // TestSessionSelectionScreen_SelectSession tests Enter key to select session.
 func TestSessionSelectionScreen_SelectSession(t *testing.T) {
 	th := theme.DefaultTheme
-	sessions := []client.DBSession{
+	sessions := []client.ManagementSession{
 		{ID: "session-1", WorkingDirectory: "/tmp/dir1", CreatedAt: time.Now(), IsActive: true},
 		{ID: "session-2", WorkingDirectory: "/tmp/dir2", CreatedAt: time.Now(), IsActive: false},
 	}
@@ -127,7 +127,7 @@ func TestSessionSelectionScreen_SelectSession(t *testing.T) {
 // TestSessionSelectionScreen_SelectEmptySessions tests Enter with no sessions.
 func TestSessionSelectionScreen_SelectEmptySessions(t *testing.T) {
 	th := theme.DefaultTheme
-	sessions := []client.DBSession{}
+	sessions := []client.ManagementSession{}
 
 	screen := NewSessionSelectionScreen(sessions, 80, 24, th)
 
@@ -141,7 +141,7 @@ func TestSessionSelectionScreen_SelectEmptySessions(t *testing.T) {
 // TestSessionSelectionScreen_CreateNewSession tests 'n' key to create new session.
 func TestSessionSelectionScreen_CreateNewSession(t *testing.T) {
 	th := theme.DefaultTheme
-	sessions := []client.DBSession{
+	sessions := []client.ManagementSession{
 		{ID: "session-1", WorkingDirectory: "/tmp/dir1", CreatedAt: time.Now(), IsActive: true},
 	}
 
@@ -163,7 +163,7 @@ func TestSessionSelectionScreen_CreateNewSession(t *testing.T) {
 // TestSessionSelectionScreen_Quit tests 'q' and Esc keys to quit.
 func TestSessionSelectionScreen_Quit(t *testing.T) {
 	th := theme.DefaultTheme
-	sessions := []client.DBSession{
+	sessions := []client.ManagementSession{
 		{ID: "session-1", WorkingDirectory: "/tmp/dir1", CreatedAt: time.Now(), IsActive: true},
 	}
 
@@ -198,7 +198,7 @@ func TestSessionSelectionScreen_Quit(t *testing.T) {
 func TestSessionSelectionScreen_ViewRendering(t *testing.T) {
 	th := theme.DefaultTheme
 	now := time.Date(2025, 11, 10, 15, 30, 0, 0, time.UTC)
-	sessions := []client.DBSession{
+	sessions := []client.ManagementSession{
 		{ID: "session-abc123def456", WorkingDirectory: "/tmp/dir1", CreatedAt: now, IsActive: true},
 		{ID: "session-xyz789ghi012", WorkingDirectory: "/tmp/dir2", CreatedAt: now.Add(-1 * time.Hour), IsActive: false},
 	}
@@ -250,7 +250,7 @@ func TestSessionSelectionScreen_ViewRendering(t *testing.T) {
 // TestSessionSelectionScreen_ViewRenderingEmpty tests rendering with no sessions.
 func TestSessionSelectionScreen_ViewRenderingEmpty(t *testing.T) {
 	th := theme.DefaultTheme
-	sessions := []client.DBSession{}
+	sessions := []client.ManagementSession{}
 
 	screen := NewSessionSelectionScreen(sessions, 80, 24, th)
 
@@ -276,12 +276,12 @@ func TestSessionSelectionScreen_ViewRenderingEmpty(t *testing.T) {
 // TestSessionSelectionScreen_ViewRenderingMany tests rendering with many sessions (>15).
 func TestSessionSelectionScreen_ViewRenderingMany(t *testing.T) {
 	th := theme.DefaultTheme
-	sessions := []client.DBSession{}
+	sessions := []client.ManagementSession{}
 	now := time.Now()
 
 	// Create 20 sessions
 	for i := 0; i < 20; i++ {
-		sessions = append(sessions, client.DBSession{
+		sessions = append(sessions, client.ManagementSession{
 			ID:               string(rune('a'+i)) + "-session-id-long",
 			WorkingDirectory: "/tmp/dir",
 			CreatedAt:        now.Add(-time.Duration(i) * time.Hour),
@@ -307,7 +307,7 @@ func TestSessionSelectionScreen_ViewRenderingMany(t *testing.T) {
 // TestSessionSelectionScreen_Resize tests window resize handling.
 func TestSessionSelectionScreen_Resize(t *testing.T) {
 	th := theme.DefaultTheme
-	sessions := []client.DBSession{
+	sessions := []client.ManagementSession{
 		{ID: "session-1", WorkingDirectory: "/tmp/dir1", CreatedAt: time.Now(), IsActive: true},
 	}
 

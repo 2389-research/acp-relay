@@ -141,7 +141,7 @@ func TestCreatePermissionResponseMessage(t *testing.T) {
 
 func TestReadOnlyMode_ClosedSessionDetection(t *testing.T) {
 	// Test that selecting a closed session sets readOnlyMode=true
-	session := client.DBSession{
+	session := client.ManagementSession{
 		ID:        "sess-closed-123",
 		IsActive:  false, // Closed session
 		CreatedAt: time.Now(),
@@ -153,7 +153,7 @@ func TestReadOnlyMode_ClosedSessionDetection(t *testing.T) {
 
 func TestReadOnlyMode_ActiveSessionDetection(t *testing.T) {
 	// Test that selecting an active session does NOT set readOnlyMode=true
-	session := client.DBSession{
+	session := client.ManagementSession{
 		ID:        "sess-active-456",
 		IsActive:  true, // Active session
 		CreatedAt: time.Now(),

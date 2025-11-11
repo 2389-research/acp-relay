@@ -35,11 +35,11 @@ type SessionResumeResultMsg struct {
 
 // Session selection modal message types.
 type showSessionSelectionMsg struct {
-	Sessions []client.DBSession
+	Sessions []client.ManagementSession
 }
 
 type sessionSelectedMsg struct {
-	Session client.DBSession
+	Session client.ManagementSession
 }
 
 type createNewSessionMsg struct{}
@@ -118,18 +118,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Set status bar to read-only mode
 		m.statusBar.SetReadOnlyMode(true)
 
-		// Load message history from database
-		if m.dbClient != nil {
-			messages, err := m.dbClient.GetSessionMessages(msg.Session.ID)
-			if err != nil {
-				DebugLog("Update: Failed to load session history: %v", err)
-			} else {
-				DebugLog("Update: Loaded %d messages from session history", len(messages))
-				for _, historyMsg := range messages {
-					m.messageStore.AddMessage(historyMsg)
-				}
-			}
-		}
+		// Note: Message history for closed sessions is not available in read-only mode
+		// TODO: Add API endpoint to fetch message history for closed sessions
 
 		// Update subtitle with read-only indicator
 		sessionIDShort := msg.Session.ID
@@ -630,19 +620,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-			// Load message history from database if available
-			if m.dbClient != nil {
-				messages, err := m.dbClient.GetSessionMessages(msg.SessionID)
-				if err != nil {
-					DebugLog("Update: SessionResumeResultMsg - failed to load history: %v", err)
-				} else {
-					DebugLog("Update: SessionResumeResultMsg - loaded %d messages from database", len(messages))
-					// Add messages to store
-					for _, historyMsg := range messages {
-						m.messageStore.AddMessage(historyMsg)
-					}
-				}
-			}
+			// Note: Message history will be populated as messages arrive from relay
 
 			// Add success message
 			successMsg := &client.Message{
@@ -1001,7 +979,7 @@ func (m Model) onResumeSession() tea.Cmd {
 }
 
 // createSessionSelectionScreen creates a session selection modal and wraps message types.
-func createSessionSelectionScreen(sessions []client.DBSession, width, height int, th theme.Theme) tea.Model {
+func createSessionSelectionScreen(sessions []client.ManagementSession, width, height int, th theme.Theme) tea.Model {
 	// We need to import the screens package - will be added at compile time
 	// This is a wrapper that converts between internal message types and screens message types
 	return &sessionSelectionWrapper{
@@ -1014,7 +992,7 @@ func createSessionSelectionScreen(sessions []client.DBSession, width, height int
 
 // sessionSelectionWrapper wraps the screens.SessionSelectionScreen to convert message types.
 type sessionSelectionWrapper struct {
-	sessions []client.DBSession
+	sessions []client.ManagementSession
 	width    int
 	height   int
 	theme    theme.Theme
@@ -1059,7 +1037,7 @@ func (w *sessionSelectionWrapper) View() string {
 }
 
 // newSessionSelectionScreenFromUpdate creates a SessionSelectionScreen from the screens package.
-func newSessionSelectionScreenFromUpdate(sessions []client.DBSession, width, height int, th theme.Theme) tea.Model {
+func newSessionSelectionScreenFromUpdate(sessions []client.ManagementSession, width, height int, th theme.Theme) tea.Model {
 	return screens.NewSessionSelectionScreen(sessions, width, height, th)
 }
 

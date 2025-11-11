@@ -22,6 +22,7 @@ type Config struct {
 
 type RelayConfig struct {
 	URL               string `yaml:"url"`
+	ManagementURL     string `yaml:"management_url"`
 	ReconnectAttempts int    `yaml:"reconnect_attempts"`
 	TimeoutSeconds    int    `yaml:"timeout_seconds"`
 }
@@ -65,6 +66,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		Relay: RelayConfig{
 			URL:               "ws://localhost:23891",
+			ManagementURL:     "http://localhost:23892",
 			ReconnectAttempts: 5,
 			TimeoutSeconds:    30,
 		},
