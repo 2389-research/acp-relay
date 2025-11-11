@@ -30,4 +30,6 @@ docs/architecture.svg
 # Test coverage files
 coverage.out
 coverage.html
-tui
+
+# TUI binary (not internal/tui source)
+/tui
