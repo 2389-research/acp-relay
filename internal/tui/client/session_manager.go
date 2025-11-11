@@ -3,7 +3,10 @@
 package client
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -142,5 +145,72 @@ func (sm *SessionManager) Rename(id, newName string) error {
 	}
 
 	sess.DisplayName = newName
+	return nil
+}
+
+// Save persists all sessions to disk
+func (sm *SessionManager) Save(dataDir string) error {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	sessionsDir := filepath.Join(dataDir, "sessions")
+	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+		return fmt.Errorf("create sessions dir: %w", err)
+	}
+
+	for _, sess := range sm.sessions {
+		data, err := json.MarshalIndent(sess, "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshal session %s: %w", sess.ID, err)
+		}
+
+		path := filepath.Join(sessionsDir, sess.ID+".json")
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			return fmt.Errorf("write session %s: %w", sess.ID, err)
+		}
+	}
+
+	return nil
+}
+
+// Load restores sessions from disk
+func (sm *SessionManager) Load(dataDir string) error {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	sessionsDir := filepath.Join(dataDir, "sessions")
+
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+		return fmt.Errorf("create sessions dir: %w", err)
+	}
+
+	// Read all session files
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		return fmt.Errorf("read sessions dir: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+
+		path := filepath.Join(sessionsDir, entry.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			// Log error but continue loading other sessions
+			continue
+		}
+
+		var sess Session
+		if err := json.Unmarshal(data, &sess); err != nil {
+			// Log error but continue
+			continue
+		}
+
+		sm.sessions[sess.ID] = &sess
+	}
+
 	return nil
 }

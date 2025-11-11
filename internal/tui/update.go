@@ -4,6 +4,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -51,6 +52,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.relayClient != nil {
 				m.relayClient.Close()
 			}
+
+			// Save sessions before quitting
+			dataDir := os.ExpandEnv("$HOME/.local/share/acp-tui")
+			if err := m.sessionManager.Save(dataDir); err != nil {
+				DebugLog("Quit: Failed to save sessions: %v", err)
+			} else {
+				DebugLog("Quit: Saved %d sessions", len(m.sessionManager.List()))
+			}
+
 			return m, tea.Quit
 
 		case "?":
@@ -379,6 +389,12 @@ func (m Model) onCreateSession() Model {
 	}
 	m.messageStore.AddMessage(welcomeMsg)
 	m = m.updateChatView()
+
+	// Save sessions to disk
+	dataDir := os.ExpandEnv("$HOME/.local/share/acp-tui")
+	if err := m.sessionManager.Save(dataDir); err != nil {
+		DebugLog("onCreateSession: Failed to save sessions: %v", err)
+	}
 
 	return m
 }
