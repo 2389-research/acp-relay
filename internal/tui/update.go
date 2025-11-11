@@ -70,11 +70,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case RelayConnectedMsg:
 		// Connection established, update status and start listening
+		DebugLog("Update: RelayConnectedMsg - connection established")
 		m.statusBar.SetConnectionStatus("connected")
 		return m, m.waitForRelayMessage()
 
 	case RelayMessageMsg:
 		// Handle incoming WebSocket messages
+		DebugLog("Update: RelayMessageMsg - received %d bytes", len(msg.Data))
 		// TODO: Parse JSON-RPC response and route appropriately
 		// For now, add as system message
 		if m.activeSessionID != "" {
@@ -86,12 +88,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.messageStore.AddMessage(sysMsg)
 			m = m.updateChatView()
+		} else {
+			DebugLog("Update: RelayMessageMsg - no active session, message ignored")
 		}
 		// Continue listening for more messages
 		return m, m.waitForRelayMessage()
 
 	case RelayErrorMsg:
 		// Handle WebSocket errors
+		DebugLog("Update: RelayErrorMsg - %v", msg.Err)
 		m.statusBar.SetConnectionStatus("disconnected")
 
 		// Add error message to message store
@@ -109,6 +114,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case RelayDisconnectedMsg:
 		// Handle disconnection
+		DebugLog("Update: RelayDisconnectedMsg - connection closed")
 		m.statusBar.SetConnectionStatus("disconnected")
 		return m, nil
 	}
@@ -270,10 +276,12 @@ func (m Model) onSendMessage() Model {
 
 	// Send message to relay server
 	if m.relayClient.IsConnected() {
+		DebugLog("onSendMessage: Sending message to relay (session=%s): %s", m.activeSessionID, content)
 		// TODO: Construct proper JSON-RPC request
 		// For now, send raw content
 		jsonMsg := []byte(content)
 		if err := m.relayClient.Send(jsonMsg); err != nil {
+			DebugLog("onSendMessage: Send failed: %v", err)
 			// Add error message
 			errMsg := &client.Message{
 				SessionID: m.activeSessionID,
@@ -283,8 +291,11 @@ func (m Model) onSendMessage() Model {
 			}
 			m.messageStore.AddMessage(errMsg)
 			m = m.updateChatView()
+		} else {
+			DebugLog("onSendMessage: Message sent successfully")
 		}
 	} else {
+		DebugLog("onSendMessage: Not connected, cannot send message")
 		// Not connected, add warning
 		warnMsg := &client.Message{
 			SessionID: m.activeSessionID,

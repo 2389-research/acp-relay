@@ -18,6 +18,7 @@ var (
 	configPath = flag.String("config", "", "Path to config file")
 	relayURL   = flag.String("relay", "", "Relay WebSocket URL (overrides config)")
 	showVer    = flag.Bool("version", false, "Show version information")
+	debug      = flag.Bool("debug", false, "Enable debug logging to ~/.local/share/acp-tui/debug.log")
 )
 
 func main() {
@@ -39,6 +40,20 @@ func main() {
 	// Override with flags
 	if *relayURL != "" {
 		cfg.Relay.URL = *relayURL
+	}
+
+	// Setup debug logging if enabled
+	if *debug {
+		logFile := os.ExpandEnv("$HOME/.local/share/acp-tui/debug.log")
+		os.MkdirAll(os.ExpandEnv("$HOME/.local/share/acp-tui"), 0755)
+		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to open debug log: %v\n", err)
+		} else {
+			tui.EnableDebug(f)
+			defer f.Close()
+			tui.DebugLog("TUI starting with relay URL: %s", cfg.Relay.URL)
+		}
 	}
 
 	// Create initial model

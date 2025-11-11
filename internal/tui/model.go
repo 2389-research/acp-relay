@@ -86,13 +86,17 @@ func (m Model) Init() tea.Cmd {
 // connectToRelay returns a command that connects to the relay server
 func (m Model) connectToRelay() tea.Cmd {
 	return func() tea.Msg {
+		DebugLog("connectToRelay: Starting connection to %s", m.config.Relay.URL)
+
 		// Update status to connecting
 		m.statusBar.SetConnectionStatus("connecting")
 
 		if err := m.relayClient.Connect(); err != nil {
+			DebugLog("connectToRelay: Connection failed: %v", err)
 			return RelayErrorMsg{Err: err}
 		}
 
+		DebugLog("connectToRelay: Connection successful")
 		return RelayConnectedMsg{}
 	}
 }
@@ -100,10 +104,13 @@ func (m Model) connectToRelay() tea.Cmd {
 // waitForRelayMessage returns a command that waits for the next relay message
 func (m Model) waitForRelayMessage() tea.Cmd {
 	return func() tea.Msg {
+		DebugLog("waitForRelayMessage: Waiting for message...")
 		select {
 		case msg := <-m.relayClient.Incoming():
+			DebugLog("waitForRelayMessage: Received message: %s", string(msg))
 			return RelayMessageMsg{Data: msg}
 		case err := <-m.relayClient.Errors():
+			DebugLog("waitForRelayMessage: Received error: %v", err)
 			return RelayErrorMsg{Err: err}
 		}
 	}
