@@ -21,7 +21,7 @@ type InputArea struct {
 // NewInputArea creates a new InputArea with the specified dimensions and theme
 func NewInputArea(width, height int, th theme.Theme) *InputArea {
 	ta := textarea.New()
-	ta.Placeholder = "Type your message... (Ctrl+S to send)"
+	ta.Placeholder = "Type your message... (Enter to send, Shift+Enter for new line)"
 	ta.SetWidth(width - 2) // Account for padding
 	ta.SetHeight(height)
 	ta.ShowLineNumbers = false

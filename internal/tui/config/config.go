@@ -77,7 +77,7 @@ func DefaultConfig() *Config {
 		Input: InputConfig{
 			MultilineMinHeight: 3,
 			MultilineMaxHeight: 10,
-			SendOnEnter:        false,
+			SendOnEnter:        true,
 			VimMode:            false,
 		},
 		Sessions: SessionsConfig{

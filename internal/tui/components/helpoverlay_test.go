@@ -45,7 +45,7 @@ func TestNewHelpOverlay(t *testing.T) {
 			}
 
 			// Verify default shortcuts are present
-			expectedShortcuts := []string{"Tab", "Ctrl+B", "n", "d", "r", "Ctrl+S", "q", "Ctrl+C", "?"}
+			expectedShortcuts := []string{"Tab", "Ctrl+B", "n", "d", "r", "Enter", "Shift+Enter", "q", "Ctrl+C", "?"}
 			foundShortcuts := make(map[string]bool)
 			for _, sc := range overlay.shortcuts {
 				foundShortcuts[sc.key] = true

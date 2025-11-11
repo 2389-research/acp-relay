@@ -129,7 +129,7 @@ func TestInputArea_ViewWithPlaceholder(t *testing.T) {
 	// When empty, should show placeholder
 	view := ia.View()
 	assert.Contains(t, view, "Type your message")
-	assert.Contains(t, view, "Ctrl+S to send")
+	assert.Contains(t, view, "Enter to send")
 }
 
 func TestInputArea_ViewWithContent(t *testing.T) {

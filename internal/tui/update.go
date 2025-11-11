@@ -190,10 +190,10 @@ func (m Model) handleFocusedInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		_, cmd = m.chatView.Update(msg)
 
 	case FocusInputArea:
-		switch msg.String() {
-		case "ctrl+s":
+		// Check if Enter should send message (Shift+Enter will still insert newline)
+		if msg.String() == "enter" && m.config.Input.SendOnEnter {
 			m.onSendMessage()
-		default:
+		} else {
 			_, cmd = m.inputArea.Update(msg)
 		}
 	}
