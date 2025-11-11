@@ -44,10 +44,13 @@ type sessionSelectedMsg struct {
 
 type createNewSessionMsg struct{}
 
-type createNewSessionAfterConnectMsg struct{}
+type createNewSessionAfterConnectMsg struct {
+	retryCount int
+}
 
 type resumeSessionAfterConnectMsg struct {
-	Session client.ManagementSession
+	Session    client.ManagementSession
+	retryCount int
 }
 
 // Global message ID counter for JSON-RPC requests.
@@ -124,7 +127,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.connectToRelay(),
 				// After connection, resume session
 				func() tea.Msg {
-					return resumeSessionAfterConnectMsg(msg)
+					return resumeSessionAfterConnectMsg{
+						Session:    msg.Session,
+						retryCount: 0,
+					}
 				},
 			)
 		}
@@ -153,7 +159,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.connectToRelay(),
 				// Send message to create session after connection completes
 				func() tea.Msg {
-					return createNewSessionAfterConnectMsg{}
+					return createNewSessionAfterConnectMsg{retryCount: 0}
 				},
 			)
 		}
@@ -165,11 +171,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case createNewSessionAfterConnectMsg:
 		// Wait for connection to be established before creating session
 		if !m.relayClient.IsConnected() {
-			DebugLog("Update: createNewSessionAfterConnectMsg - waiting for connection")
+			// Check if we've exceeded max retries (20 retries = 1 second)
+			if msg.retryCount >= 20 {
+				DebugLog("Update: createNewSessionAfterConnectMsg - connection timeout after %d retries", msg.retryCount)
+				notifCmd := m.notifications.Show("Connection timeout - please try again", "error")
+				return m, notifCmd
+			}
+
+			DebugLog("Update: createNewSessionAfterConnectMsg - waiting for connection (retry %d/20)", msg.retryCount+1)
 			// Connection not ready yet, check again shortly
 			return m, func() tea.Msg {
 				time.Sleep(50 * time.Millisecond)
-				return createNewSessionAfterConnectMsg{}
+				return createNewSessionAfterConnectMsg{retryCount: msg.retryCount + 1}
 			}
 		}
 		// Connection established, now create session
@@ -180,11 +193,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case resumeSessionAfterConnectMsg:
 		// Wait for connection to be established before resuming session
 		if !m.relayClient.IsConnected() {
-			DebugLog("Update: resumeSessionAfterConnectMsg - waiting for connection")
+			// Check if we've exceeded max retries (20 retries = 1 second)
+			if msg.retryCount >= 20 {
+				DebugLog("Update: resumeSessionAfterConnectMsg - connection timeout after %d retries", msg.retryCount)
+				notifCmd := m.notifications.Show("Connection timeout - please try again", "error")
+				return m, notifCmd
+			}
+
+			DebugLog("Update: resumeSessionAfterConnectMsg - waiting for connection (retry %d/20)", msg.retryCount+1)
 			// Connection not ready yet, check again shortly
 			return m, func() tea.Msg {
 				time.Sleep(50 * time.Millisecond)
-				return resumeSessionAfterConnectMsg{Session: msg.Session}
+				return resumeSessionAfterConnectMsg{
+					Session:    msg.Session,
+					retryCount: msg.retryCount + 1,
+				}
 			}
 		}
 		// Connection established, now resume session
