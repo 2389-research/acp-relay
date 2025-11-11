@@ -228,8 +228,10 @@ func (m Model) handleFocusedInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case FocusInputArea:
 		// Check if Enter should send message (Shift+Enter will still insert newline)
 		if msg.String() == "enter" && m.config.Input.SendOnEnter {
+			DebugLog("handleFocusedInput: Enter pressed in InputArea, calling onSendMessage")
 			m = m.onSendMessage()
 		} else {
+			DebugLog("handleFocusedInput: Passing key '%s' to InputArea", msg.String())
 			_, cmd = m.inputArea.Update(msg)
 		}
 	}
@@ -252,14 +254,20 @@ func (m Model) onSessionSelect() Model {
 
 // onSendMessage sends the input area content as a message
 func (m Model) onSendMessage() Model {
+	DebugLog("onSendMessage: Called (activeSessionID=%s, focusedArea=%d)", m.activeSessionID, m.focusedArea)
+
 	if m.activeSessionID == "" {
+		DebugLog("onSendMessage: No active session, cannot send")
 		return m
 	}
 
 	content := m.inputArea.GetValue()
 	if content == "" {
+		DebugLog("onSendMessage: Empty content, ignoring")
 		return m
 	}
+
+	DebugLog("onSendMessage: Sending message (length=%d)", len(content))
 
 	// Add user message to store
 	userMsg := &client.Message{

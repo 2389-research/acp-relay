@@ -58,7 +58,7 @@ func NewModel(cfg *config.Config) Model {
 	sessionManager := client.NewSessionManager()
 	messageStore := client.NewMessageStore(1000) // 1000 message history limit
 
-	return Model{
+	m := Model{
 		config:          cfg,
 		theme:           th,
 		sidebar:         sidebar,
@@ -69,10 +69,15 @@ func NewModel(cfg *config.Config) Model {
 		relayClient:     relayClient,
 		sessionManager:  sessionManager,
 		messageStore:    messageStore,
-		focusedArea:     FocusSidebar,
+		focusedArea:     FocusInputArea,
 		activeSessionID: "",
 		sidebarVisible:  true,
 	}
+
+	// Start with input area focused
+	m.inputArea.Focus()
+
+	return m
 }
 
 func (m Model) Init() tea.Cmd {
