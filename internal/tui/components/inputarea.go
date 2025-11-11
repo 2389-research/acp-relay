@@ -9,7 +9,7 @@ import (
 	"github.com/harper/acp-relay/internal/tui/theme"
 )
 
-// InputArea represents a multi-line text input area
+// InputArea represents a multi-line text input area.
 type InputArea struct {
 	width    int
 	height   int
@@ -18,7 +18,7 @@ type InputArea struct {
 	focused  bool
 }
 
-// NewInputArea creates a new InputArea with the specified dimensions and theme
+// NewInputArea creates a new InputArea with the specified dimensions and theme.
 func NewInputArea(width, height int, th theme.Theme) *InputArea {
 	ta := textarea.New()
 	ta.Placeholder = "Type your message... (Enter to send, Shift+Enter for new line)"
@@ -40,34 +40,34 @@ func NewInputArea(width, height int, th theme.Theme) *InputArea {
 	}
 }
 
-// SetValue sets the text content of the input area
+// SetValue sets the text content of the input area.
 func (ia *InputArea) SetValue(value string) {
 	ia.textarea.SetValue(value)
 }
 
-// GetValue returns the current text content
+// GetValue returns the current text content.
 func (ia *InputArea) GetValue() string {
 	return ia.textarea.Value()
 }
 
-// Clear resets the input area to empty
+// Clear resets the input area to empty.
 func (ia *InputArea) Clear() {
 	ia.textarea.Reset()
 }
 
-// Focus sets the focused state to true
+// Focus sets the focused state to true.
 func (ia *InputArea) Focus() {
 	ia.focused = true
 	ia.textarea.Focus()
 }
 
-// Blur removes focus from the input area
+// Blur removes focus from the input area.
 func (ia *InputArea) Blur() {
 	ia.focused = false
 	ia.textarea.Blur()
 }
 
-// SetSize updates the dimensions of the input area
+// SetSize updates the dimensions of the input area.
 func (ia *InputArea) SetSize(width, height int) {
 	ia.width = width
 	ia.height = height
@@ -75,19 +75,19 @@ func (ia *InputArea) SetSize(width, height int) {
 	ia.textarea.SetHeight(height)
 }
 
-// Init initializes the component (Bubbletea lifecycle)
+// Init initializes the component (Bubbletea lifecycle).
 func (ia *InputArea) Init() tea.Cmd {
 	return textarea.Blink
 }
 
-// Update handles messages and updates the component (Bubbletea lifecycle)
+// Update handles messages and updates the component (Bubbletea lifecycle).
 func (ia *InputArea) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	ia.textarea, cmd = ia.textarea.Update(msg)
 	return ia, cmd
 }
 
-// View renders the input area with theme styling
+// View renders the input area with theme styling.
 func (ia *InputArea) View() string {
 	style := ia.theme.InputAreaStyle().
 		Width(ia.width).

@@ -51,7 +51,7 @@ database:
   path: "` + dataPath + `/db.sqlite"
 `
 
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
 		t.Fatal(err)
 	}
 

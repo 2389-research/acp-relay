@@ -28,14 +28,14 @@ func TestConfigHome_WithEnv(t *testing.T) {
 	oldXDG := os.Getenv("XDG_CONFIG_HOME")
 	defer func() {
 		if oldXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", oldXDG)
+			_ = os.Setenv("XDG_CONFIG_HOME", oldXDG)
 		} else {
-			os.Unsetenv("XDG_CONFIG_HOME")
+			_ = os.Unsetenv("XDG_CONFIG_HOME")
 		}
 	}()
 
 	testPath := "/tmp/custom-config"
-	os.Setenv("XDG_CONFIG_HOME", testPath)
+	_ = os.Setenv("XDG_CONFIG_HOME", testPath)
 
 	got := ConfigHome()
 	want := filepath.Join(testPath, "acp-relay")
@@ -118,8 +118,8 @@ func TestExpandPath(t *testing.T) {
 func TestExpandPath_MissingHOME(t *testing.T) {
 	// Regression test for Error #2 from previous implementation
 	oldHome := os.Getenv("HOME")
-	os.Unsetenv("HOME")
-	defer os.Setenv("HOME", oldHome)
+	_ = os.Unsetenv("HOME")
+	defer func() { _ = os.Setenv("HOME", oldHome) }()
 
 	// Should fall back to current directory
 	got := ExpandPath("$XDG_DATA_HOME/db.sqlite")

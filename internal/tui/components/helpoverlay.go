@@ -10,13 +10,13 @@ import (
 	"github.com/harper/acp-relay/internal/tui/theme"
 )
 
-// Shortcut represents a keyboard shortcut with its description
+// Shortcut represents a keyboard shortcut with its description.
 type Shortcut struct {
 	key         string
 	description string
 }
 
-// HelpOverlay displays a modal overlay with keyboard shortcuts
+// HelpOverlay displays a modal overlay with keyboard shortcuts.
 type HelpOverlay struct {
 	width     int
 	height    int
@@ -25,7 +25,7 @@ type HelpOverlay struct {
 	shortcuts []Shortcut
 }
 
-// NewHelpOverlay creates a new help overlay with default shortcuts
+// NewHelpOverlay creates a new help overlay with default shortcuts.
 func NewHelpOverlay(width, height int, t theme.Theme) *HelpOverlay {
 	return &HelpOverlay{
 		width:   width,
@@ -47,33 +47,35 @@ func NewHelpOverlay(width, height int, t theme.Theme) *HelpOverlay {
 	}
 }
 
-// Show makes the overlay visible
+// Show makes the overlay visible.
 func (h *HelpOverlay) Show() {
 	h.visible = true
 }
 
-// Hide makes the overlay invisible
+// Hide makes the overlay invisible.
 func (h *HelpOverlay) Hide() {
 	h.visible = false
 }
 
-// IsVisible returns whether the overlay is currently visible
+// IsVisible returns whether the overlay is currently visible.
 func (h *HelpOverlay) IsVisible() bool {
 	return h.visible
 }
 
-// Toggle toggles the overlay visibility
+// Toggle toggles the overlay visibility.
 func (h *HelpOverlay) Toggle() {
 	h.visible = !h.visible
 }
 
-// SetSize updates the overlay dimensions
+// SetSize updates the overlay dimensions.
 func (h *HelpOverlay) SetSize(width, height int) {
 	h.width = width
 	h.height = height
 }
 
 // View renders the help overlay
+//
+//nolint:funlen // UI rendering function
 func (h *HelpOverlay) View() string {
 	if !h.visible {
 		return ""
@@ -163,7 +165,7 @@ func (h *HelpOverlay) View() string {
 	return result.String()
 }
 
-// getVisibleWidth calculates the visible width of a string, ignoring ANSI escape codes
+// getVisibleWidth calculates the visible width of a string, ignoring ANSI escape codes.
 func getVisibleWidth(s string) int {
 	width := 0
 	inEscape := false

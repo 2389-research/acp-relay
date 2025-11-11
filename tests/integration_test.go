@@ -49,32 +49,36 @@ func startTestServer(t *testing.T, cfg *config.Config) (cleanup func()) {
 
 	wsListener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Server.WebSocketHost, cfg.Server.WebSocketPort))
 	if err != nil {
-		httpListener.Close()
+		_ = httpListener.Close()
 		t.Fatalf("failed to start WebSocket listener on %s:%d: %v", cfg.Server.WebSocketHost, cfg.Server.WebSocketPort, err)
 	}
 
 	mgmtListener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Server.ManagementHost, cfg.Server.ManagementPort))
 	if err != nil {
-		httpListener.Close()
-		wsListener.Close()
+		_ = httpListener.Close()
+		_ = wsListener.Close()
 		t.Fatalf("failed to start management listener on %s:%d: %v", cfg.Server.ManagementHost, cfg.Server.ManagementPort, err)
 	}
 
-	go http.Serve(httpListener, httpSrv)
-	go http.Serve(wsListener, wsSrv)
-	go http.Serve(mgmtListener, mgmtSrv)
+	//nolint:gosec // test servers don't need timeout configuration
+	go func() { _ = http.Serve(httpListener, httpSrv) }()
+	//nolint:gosec // test servers don't need timeout configuration
+	go func() { _ = http.Serve(wsListener, wsSrv) }()
+	//nolint:gosec // test servers don't need timeout configuration
+	go func() { _ = http.Serve(mgmtListener, mgmtSrv) }()
 
 	// Wait for servers to be ready
 	time.Sleep(100 * time.Millisecond)
 
 	return func() {
-		httpListener.Close()
-		wsListener.Close()
-		mgmtListener.Close()
-		database.Close()
+		_ = httpListener.Close()
+		_ = wsListener.Close()
+		_ = mgmtListener.Close()
+		_ = database.Close()
 	}
 }
 
+//nolint:funlen // integration test covering full HTTP protocol
 func TestFullHTTPFlow(t *testing.T) {
 	// Load test config
 	cfg, err := config.Load("test_config.yaml")
@@ -95,7 +99,7 @@ func TestFullHTTPFlow(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to check health: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode != 200 {
 			t.Errorf("expected status 200, got %d", resp.StatusCode)
@@ -130,7 +134,7 @@ func TestFullHTTPFlow(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to create session: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode != 200 {
 			t.Errorf("expected status 200, got %d", resp.StatusCode)
@@ -185,10 +189,10 @@ func TestFullHTTPFlow(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to send prompt: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		var promptResp map[string]interface{}
-		json.NewDecoder(resp.Body).Decode(&promptResp)
+		_ = json.NewDecoder(resp.Body).Decode(&promptResp)
 
 		// Should get an error response
 		if promptResp["error"] == nil {

@@ -1,6 +1,7 @@
 // ABOUTME: Tests for container runtime detection (Docker, Podman, Colima)
 // ABOUTME: Validates socket discovery and priority ordering
 
+//nolint:goconst // test file uses repeated strings for readability and clarity
 package runtime
 
 import (

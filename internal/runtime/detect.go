@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// RuntimeInfo contains detected runtime information
+// RuntimeInfo contains detected runtime information.
 type RuntimeInfo struct {
 	Name       string // "docker", "podman", "colima"
 	Status     string // "available", "cli-only", "unavailable", "running", "stopped"
@@ -23,7 +23,7 @@ func (r RuntimeInfo) String() string {
 	return fmt.Sprintf("%s (%s) v%s @ %s", r.Name, r.Status, r.Version, r.SocketPath)
 }
 
-// DetectAll finds all available container runtimes
+// DetectAll finds all available container runtimes.
 func DetectAll() []RuntimeInfo {
 	return []RuntimeInfo{
 		detectDocker(),
@@ -32,7 +32,7 @@ func DetectAll() []RuntimeInfo {
 	}
 }
 
-// DetectBest returns the best available runtime (priority: Colima > Docker > Podman)
+// DetectBest returns the best available runtime (priority: Colima > Docker > Podman).
 func DetectBest() *RuntimeInfo {
 	all := DetectAll()
 
@@ -60,7 +60,7 @@ func DetectBest() *RuntimeInfo {
 	return nil
 }
 
-// getHome returns HOME with fallback to current directory
+// getHome returns HOME with fallback to current directory.
 func getHome() string {
 	if home := os.Getenv("HOME"); home != "" {
 		return home
@@ -77,6 +77,7 @@ func detectDocker() RuntimeInfo {
 	// Check CLI presence
 	version, err := exec.Command("docker", "version", "--format", "{{.Client.Version}}").Output()
 	if err != nil {
+		//nolint:goconst // status strings used in different runtime contexts
 		info.Status = "unavailable"
 		return info
 	}

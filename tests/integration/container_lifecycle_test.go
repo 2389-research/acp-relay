@@ -14,6 +14,7 @@ import (
 	"github.com/harper/acp-relay/internal/container"
 )
 
+//nolint:funlen // container test with label validation
 func TestContainerLabels_Present(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
@@ -41,9 +42,10 @@ func TestContainerLabels_Present(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
-	defer m.StopContainer(sessionID)
+	defer func() { _ = m.StopContainer(sessionID) }()
 
 	// Inspect container to verify labels using docker CLI
+	//nolint:gosec // test docker inspect command with controlled container ID
 	cmd := exec.Command("docker", "inspect", components.ContainerID)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -91,6 +93,7 @@ func TestContainerLabels_Present(t *testing.T) {
 	}
 }
 
+//nolint:funlen // test with extensive environment validation
 func TestEnvironmentFiltering(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
@@ -109,8 +112,8 @@ func TestEnvironmentFiltering(t *testing.T) {
 	env := map[string]string{
 		"TERM":       "xterm-256color",
 		"LANG":       "en_US.UTF-8",
-		"HOME":       "/home/user",     // Should be filtered
-		"SECRET_KEY": "sensitive",      // Should be filtered
+		"HOME":       "/home/user", // Should be filtered
+		"SECRET_KEY": "sensitive",  // Should be filtered
 	}
 
 	m, err := container.NewManager(cfg, "/bin/sh", []string{"-c", "env && sleep 30"}, env, nil)
@@ -125,8 +128,9 @@ func TestEnvironmentFiltering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
-	defer m.StopContainer(sessionID)
+	defer func() { _ = m.StopContainer(sessionID) }()
 
+	//nolint:gosec // test docker inspect command with controlled container ID
 	// Inspect container to verify env using docker CLI
 	cmd := exec.Command("docker", "inspect", components.ContainerID)
 	output, err := cmd.CombinedOutput()

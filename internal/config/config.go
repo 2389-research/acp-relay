@@ -69,6 +69,7 @@ func Load(path string) (*Config, error) {
 
 	// IMPORTANT: Viper lowercases all map keys, but environment variables are case-sensitive
 	// Parse YAML directly to preserve original key case for agent.env
+	//nolint:gosec // config file path from validated user input
 	data, err := os.ReadFile(path)
 	if err == nil {
 		var rawConfig struct {

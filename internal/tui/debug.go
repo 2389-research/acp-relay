@@ -15,7 +15,7 @@ var (
 	debugMu      sync.Mutex
 )
 
-// EnableDebug enables debug logging to the specified writer
+// EnableDebug enables debug logging to the specified writer.
 func EnableDebug(w io.Writer) {
 	debugMu.Lock()
 	defer debugMu.Unlock()
@@ -23,7 +23,7 @@ func EnableDebug(w io.Writer) {
 	debugWriter = w
 }
 
-// DebugLog writes a debug message with timestamp
+// DebugLog writes a debug message with timestamp.
 func DebugLog(format string, args ...interface{}) {
 	debugMu.Lock()
 	defer debugMu.Unlock()
@@ -34,5 +34,5 @@ func DebugLog(format string, args ...interface{}) {
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
 	message := fmt.Sprintf(format, args...)
-	fmt.Fprintf(debugWriter, "[%s] %s\n", timestamp, message)
+	_, _ = fmt.Fprintf(debugWriter, "[%s] %s\n", timestamp, message)
 }

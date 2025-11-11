@@ -13,7 +13,7 @@ import (
 	"github.com/harper/acp-relay/internal/tui/client"
 )
 
-// Custom message types for relay communication
+// Custom message types for relay communication.
 type RelayMessageMsg struct {
 	Data []byte
 }
@@ -26,9 +26,10 @@ type RelayConnectedMsg struct{}
 
 type RelayDisconnectedMsg struct{}
 
-// Global message ID counter for JSON-RPC requests
+// Global message ID counter for JSON-RPC requests.
 var messageIDCounter uint64
 
+//nolint:gocognit,gocyclo,funlen // TUI event handling state machine requiring many conditional branches
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
@@ -54,7 +55,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			// Close relay client before quitting
 			if m.relayClient != nil {
-				m.relayClient.Close()
+				_ = m.relayClient.Close()
 			}
 
 			// Save sessions before quitting
@@ -113,6 +114,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Check if this is a response (has result/error) or notification (has method)
+		//nolint:nestif // message routing requires nested checks for different response types
 		if method, hasMethod := response["method"].(string); hasMethod {
 			// This is a notification
 			params, _ := response["params"].(map[string]interface{})
@@ -256,7 +258,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// updateComponentSizes recalculates and applies sizes to all components based on window dimensions
+// updateComponentSizes recalculates and applies sizes to all components based on window dimensions.
 func (m *Model) updateComponentSizes() {
 	if m.width == 0 || m.height == 0 {
 		return
@@ -296,11 +298,10 @@ func (m *Model) updateComponentSizes() {
 	m.helpOverlay.SetSize(m.width, m.height)
 }
 
-// cycleFocus moves focus to the next component
+// cycleFocus moves focus to the next component.
 func (m *Model) cycleFocus() {
 	// Blur current component
-	switch m.focusedArea {
-	case FocusInputArea:
+	if m.focusedArea == FocusInputArea {
 		m.inputArea.Blur()
 	}
 
@@ -313,13 +314,12 @@ func (m *Model) cycleFocus() {
 	}
 
 	// Focus new component
-	switch m.focusedArea {
-	case FocusInputArea:
+	if m.focusedArea == FocusInputArea {
 		m.inputArea.Focus()
 	}
 }
 
-// handleFocusedInput routes key messages to the currently focused component
+// handleFocusedInput routes key messages to the currently focused component.
 func (m Model) handleFocusedInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -332,7 +332,7 @@ func (m Model) handleFocusedInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "down", "j":
 			m.sidebar.CursorDown()
 			m = m.onSessionSelect()
-		case "enter":
+		case "enter": //nolint:goconst // key string used in specific switch case
 			m = m.onSessionSelect()
 		case "n":
 			m = m.onCreateSession()
@@ -364,7 +364,7 @@ func (m Model) handleFocusedInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// onSessionSelect updates the active session and loads its messages
+// onSessionSelect updates the active session and loads its messages.
 func (m Model) onSessionSelect() Model {
 	sess := m.sidebar.GetSelectedSession()
 	if sess == nil {
@@ -378,6 +378,8 @@ func (m Model) onSessionSelect() Model {
 }
 
 // onSendMessage sends the input area content as a message
+//
+//nolint:funlen // message sending with protocol handling
 func (m Model) onSendMessage() Model {
 	DebugLog("onSendMessage: Called (activeSessionID=%s, focusedArea=%d)", m.activeSessionID, m.focusedArea)
 
@@ -474,7 +476,7 @@ func (m Model) onSendMessage() Model {
 	return m
 }
 
-// updateChatView refreshes the chat view with current session messages
+// updateChatView refreshes the chat view with current session messages.
 func (m Model) updateChatView() Model {
 	if m.activeSessionID == "" {
 		m.chatView.SetMessages([]*client.Message{})
@@ -486,14 +488,14 @@ func (m Model) updateChatView() Model {
 	return m
 }
 
-// refreshSidebar updates the sidebar with current session list
+// refreshSidebar updates the sidebar with current session list.
 func (m Model) refreshSidebar() Model {
 	sessions := m.sessionManager.List()
 	m.sidebar.SetSessions(sessions)
 	return m
 }
 
-// onCreateSession creates a new session on the relay server
+// onCreateSession creates a new session on the relay server.
 func (m Model) onCreateSession() Model {
 	if !m.relayClient.IsConnected() {
 		DebugLog("onCreateSession: Not connected to relay")

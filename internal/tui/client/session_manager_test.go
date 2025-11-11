@@ -30,7 +30,7 @@ func TestSessionManager_Create(t *testing.T) {
 
 func TestSessionManager_Get(t *testing.T) {
 	sm := NewSessionManager()
-	sm.Create("sess-123", "/tmp/workspace", "Test")
+	_, _ = sm.Create("sess-123", "/tmp/workspace", "Test")
 
 	sess, exists := sm.Get("sess-123")
 	assert.True(t, exists)
@@ -42,7 +42,7 @@ func TestSessionManager_Get(t *testing.T) {
 
 func TestSessionManager_Delete(t *testing.T) {
 	sm := NewSessionManager()
-	sm.Create("sess-123", "/tmp/workspace", "Test")
+	_, _ = sm.Create("sess-123", "/tmp/workspace", "Test")
 
 	err := sm.Delete("sess-123")
 	require.NoError(t, err)
@@ -57,8 +57,8 @@ func TestSessionManager_Delete(t *testing.T) {
 
 func TestSessionManager_List(t *testing.T) {
 	sm := NewSessionManager()
-	sm.Create("sess-1", "/tmp/1", "One")
-	sm.Create("sess-2", "/tmp/2", "Two")
+	_, _ = sm.Create("sess-1", "/tmp/1", "One")
+	_, _ = sm.Create("sess-2", "/tmp/2", "Two")
 
 	sessions := sm.List()
 	assert.Len(t, sessions, 2)
@@ -79,7 +79,7 @@ func TestSessionManager_UpdateStatus(t *testing.T) {
 
 func TestSessionManager_Rename(t *testing.T) {
 	sm := NewSessionManager()
-	sm.Create("sess-123", "/tmp", "Original Name")
+	_, _ = sm.Create("sess-123", "/tmp", "Original Name")
 
 	// Test successful rename
 	err := sm.Rename("sess-123", "New Name")

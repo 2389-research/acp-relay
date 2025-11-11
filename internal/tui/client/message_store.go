@@ -59,9 +59,9 @@ type Message struct {
 }
 
 type MessageStore struct {
-	messages   map[string][]*Message
-	limit      int
-	mu         sync.RWMutex
+	messages map[string][]*Message
+	limit    int
+	mu       sync.RWMutex
 }
 
 func NewMessageStore(limit int) *MessageStore {

@@ -12,6 +12,7 @@ import (
 	"github.com/harper/acp-relay/internal/xdg"
 )
 
+//nolint:funlen // setup wizard function
 func runSetup() {
 	fmt.Println("🚀 ACP-Relay Automated Setup")
 	fmt.Println()
@@ -43,7 +44,7 @@ func runSetup() {
 	}
 
 	// Create config directory
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0750); err != nil {
 		fmt.Printf("❌ Failed to create config directory: %v\n", err)
 		os.Exit(1)
 	}
@@ -86,7 +87,7 @@ database:
 `, best.SocketPath, dataDir, dataDir)
 
 	// Write config file
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
 		fmt.Printf("❌ Failed to write config: %v\n", err)
 		os.Exit(1)
 	}

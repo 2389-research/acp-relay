@@ -10,7 +10,7 @@ import (
 )
 
 // SendSessionNew sends session/new to the agent and captures their session ID
-// This must be called after SendInitialize per the ACP protocol spec
+// This must be called after SendInitialize per the ACP protocol spec.
 func (s *Session) SendSessionNew(workingDir string) error {
 	// Build session/new request per ACP spec
 	sessionNewReq := map[string]interface{}{

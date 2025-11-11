@@ -83,7 +83,8 @@ func (s *Sidebar) View() string {
 			Render(emptyMsg)
 	}
 
-	var items []string
+	// Preallocate items slice with capacity: title + empty line + sessions + footer
+	items := make([]string, 0, 2+len(s.sessions)+1)
 
 	// Title
 	title := s.theme.ActiveSessionStyle().

@@ -25,7 +25,7 @@ func TestCreateSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create session: %v", err)
 	}
-	defer mgr.CloseSession(sess.ID)
+	defer func() { _ = mgr.CloseSession(sess.ID) }()
 
 	if sess.ID == "" {
 		t.Error("expected session ID to be set")

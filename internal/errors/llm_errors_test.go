@@ -14,7 +14,7 @@ func TestAgentConnectionError(t *testing.T) {
 	}
 
 	var parsed map[string]interface{}
-	json.Unmarshal(data, &parsed)
+	_ = json.Unmarshal(data, &parsed)
 
 	if parsed["error_type"] != "agent_connection_timeout" {
 		t.Errorf("expected error_type agent_connection_timeout, got %v", parsed["error_type"])
@@ -44,7 +44,7 @@ func TestSessionNotFoundError(t *testing.T) {
 	}
 
 	var parsed map[string]interface{}
-	json.Unmarshal(data, &parsed)
+	_ = json.Unmarshal(data, &parsed)
 
 	if parsed["error_type"] != "session_not_found" {
 		t.Errorf("expected error_type session_not_found, got %v", parsed["error_type"])
@@ -88,7 +88,7 @@ func TestInvalidParamsError(t *testing.T) {
 	}
 
 	var parsed map[string]interface{}
-	json.Unmarshal(data, &parsed)
+	_ = json.Unmarshal(data, &parsed)
 
 	if parsed["error_type"] != "invalid_params" {
 		t.Errorf("expected error_type invalid_params, got %v", parsed["error_type"])
@@ -108,7 +108,7 @@ func TestParseError(t *testing.T) {
 	}
 
 	var parsed map[string]interface{}
-	json.Unmarshal(data, &parsed)
+	_ = json.Unmarshal(data, &parsed)
 
 	if parsed["error_type"] != "parse_error" {
 		t.Errorf("expected error_type parse_error, got %v", parsed["error_type"])

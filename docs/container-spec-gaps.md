@@ -137,4 +137,3 @@ hostConfig.Tmpfs = map[string]string{"/tmp":"rw,noexec,nosuid,nodev,size=256m", 
 * Warm pool idea: maintain `[]*Container` ready with label `acp.pool=warm`, pop on session create.
 
 If you want, I can turn these into PRs: (1) security hardening, (2) stream handling & tests, (3) secrets/egress, (4) ops metrics & cleanup.
-

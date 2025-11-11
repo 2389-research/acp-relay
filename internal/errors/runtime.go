@@ -44,13 +44,13 @@ func (e *RuntimeNotFoundError) ToJSONRPCError() JSONRPCError {
 		Code:    -32000,
 		Message: e.Error(),
 		Data: map[string]interface{}{
-			"error_type":       "runtime_not_found",
-			"explanation":      "The container runtime specified in your config is not available.",
-			"possible_causes":  causes,
+			"error_type":        "runtime_not_found",
+			"explanation":       "The container runtime specified in your config is not available.",
+			"possible_causes":   causes,
 			"suggested_actions": actions,
 			"relevant_state": map[string]interface{}{
-				"requested":  e.RequestedRuntime,
-				"available":  e.AvailableRuntimes,
+				"requested": e.RequestedRuntime,
+				"available": e.AvailableRuntimes,
 			},
 			"recoverable": true,
 		},

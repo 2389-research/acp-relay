@@ -11,7 +11,7 @@ import (
 	"github.com/docker/docker/pkg/stdcopy"
 )
 
-// readStreamsConcurrently reads both stdout and stderr concurrently to avoid deadlock
+// readStreamsConcurrently reads both stdout and stderr concurrently to avoid deadlock.
 func readStreamsConcurrently(stdout, stderr io.Reader) (stdoutData, stderrData []byte, err error) {
 	type result struct {
 		data []byte
@@ -175,11 +175,13 @@ func TestDemuxStreams_InterleavedStreams(t *testing.T) {
 		t.Fatalf("Failed to read streams: %v", err)
 	}
 
+	// nolint:gocritic // Intentional append to create combined test data
 	expectedStdout := append(stdoutLine1, stdoutLine2...)
 	if !bytes.Equal(stdoutContent, expectedStdout) {
 		t.Errorf("stdout = %q, want %q", stdoutContent, expectedStdout)
 	}
 
+	// nolint:gocritic // Intentional append to create combined test data
 	expectedStderr := append(stderrLine1, stderrLine2...)
 	if !bytes.Equal(stderrContent, expectedStderr) {
 		t.Errorf("stderr = %q, want %q", stderrContent, expectedStderr)

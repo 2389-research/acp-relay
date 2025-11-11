@@ -19,34 +19,34 @@ func TestNewStatusBar(t *testing.T) {
 
 func TestStatusBar_SetConnectionStatus(t *testing.T) {
 	tests := []struct {
-		name           string
-		status         string
-		expectedIcon   string
-		expectedText   string
+		name         string
+		status       string
+		expectedIcon string
+		expectedText string
 	}{
 		{
-			name:           "connected status",
-			status:         "connected",
-			expectedIcon:   "🟢",
-			expectedText:   "Connected",
+			name:         "connected status",
+			status:       "connected",
+			expectedIcon: "🟢",
+			expectedText: "Connected",
 		},
 		{
-			name:           "connecting status",
-			status:         "connecting",
-			expectedIcon:   "🟡",
-			expectedText:   "Connecting",
+			name:         "connecting status",
+			status:       "connecting",
+			expectedIcon: "🟡",
+			expectedText: "Connecting",
 		},
 		{
-			name:           "disconnected status",
-			status:         "disconnected",
-			expectedIcon:   "🔴",
-			expectedText:   "Disconnected",
+			name:         "disconnected status",
+			status:       "disconnected",
+			expectedIcon: "🔴",
+			expectedText: "Disconnected",
 		},
 		{
-			name:           "unknown status defaults to disconnected",
-			status:         "invalid",
-			expectedIcon:   "🔴",
-			expectedText:   "Disconnected",
+			name:         "unknown status defaults to disconnected",
+			status:       "invalid",
+			expectedIcon: "🔴",
+			expectedText: "Disconnected",
 		},
 	}
 
@@ -141,7 +141,7 @@ func TestStatusBar_LongSessionName(t *testing.T) {
 	assert.Contains(t, view, "Session:")
 }
 
-// stripAnsiCodes removes ANSI escape codes from a string for testing
+// stripAnsiCodes removes ANSI escape codes from a string for testing.
 func stripAnsiCodes(s string) string {
 	// Simple removal of ANSI codes for testing purposes
 	result := strings.Builder{}

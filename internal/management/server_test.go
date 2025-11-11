@@ -32,7 +32,7 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 
 	var health map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &health)
+	_ = json.Unmarshal(rec.Body.Bytes(), &health)
 
 	if health["status"] != "healthy" {
 		t.Error("expected status healthy")

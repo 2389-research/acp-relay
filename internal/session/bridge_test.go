@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestStdioBridge(t *testing.T) {
@@ -26,7 +28,7 @@ func TestStdioBridge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create session: %v", err)
 	}
-	defer mgr.CloseSession(sess.ID)
+	defer func() { _ = mgr.CloseSession(sess.ID) }()
 
 	// Send a JSON-RPC message (non-initialize method)
 	msg := map[string]interface{}{
@@ -34,7 +36,8 @@ func TestStdioBridge(t *testing.T) {
 		"method":  "test",
 		"id":      2,
 	}
-	data, _ := json.Marshal(msg)
+	data, err := json.Marshal(msg)
+	require.NoError(t, err)
 	data = append(data, '\n')
 
 	sess.ToAgent <- data

@@ -22,7 +22,7 @@ func mockRelayHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Echo messages back
 	for {
@@ -46,7 +46,7 @@ func TestRelayClient_Connect(t *testing.T) {
 	err := client.Connect()
 	require.NoError(t, err)
 
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	assert.True(t, client.IsConnected())
 }
 
@@ -58,7 +58,7 @@ func TestRelayClient_SendReceive(t *testing.T) {
 
 	client := NewRelayClient(wsURL)
 	require.NoError(t, client.Connect())
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Send message
 	testMsg := []byte(`{"jsonrpc":"2.0","method":"test","id":1}`)

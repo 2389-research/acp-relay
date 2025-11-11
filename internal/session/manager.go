@@ -18,7 +18,7 @@ import (
 )
 
 type ManagerConfig struct {
-	Mode            string                 // "process" or "container"
+	Mode            string // "process" or "container"
 	AgentCommand    string
 	AgentArgs       []string
 	AgentEnv        map[string]string
@@ -41,6 +41,7 @@ func NewManager(cfg ManagerConfig, database *db.DB) *Manager {
 	}
 
 	// Initialize container manager if mode is "container"
+	//nolint:goconst // mode string used in specific condition check
 	if cfg.Mode == "container" {
 		containerMgr, err := container.NewManager(
 			cfg.ContainerConfig,
@@ -62,6 +63,7 @@ func NewManager(cfg ManagerConfig, database *db.DB) *Manager {
 func (m *Manager) createProcessSession(ctx context.Context, sessionID, workingDir string) (*Session, error) {
 	sessionCtx, cancel := context.WithCancel(ctx)
 
+	//nolint:gosec // agent command from configuration, not user input
 	// Create agent command
 	cmd := exec.CommandContext(sessionCtx, m.config.AgentCommand, m.config.AgentArgs...)
 	cmd.Dir = workingDir
@@ -124,6 +126,7 @@ func (m *Manager) createProcessSession(ctx context.Context, sessionID, workingDi
 	return sess, nil
 }
 
+//nolint:funlen // session creation requires extensive setup
 func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Session, error) {
 	sessionID := "sess_" + uuid.New().String()[:8]
 
@@ -131,6 +134,7 @@ func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Sessio
 	var err error
 
 	// Route based on mode
+	//nolint:nestif // container mode setup requires nested conditionals for resource management
 	if m.config.Mode == "container" {
 		log.Printf("[%s] Creating container session (image: %s)", sessionID, m.config.ContainerConfig.Image)
 
@@ -161,8 +165,9 @@ func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Sessio
 		// Log session creation to database
 		if m.db != nil {
 			if err := m.db.CreateSession(sessionID, workingDir); err != nil {
-				cancel()  // Clean up context
-				m.containerManager.StopContainer(sessionID)  // Clean up container
+				cancel() // Clean up context
+				//nolint:contextcheck // cleanup call, context already cancelled
+				_ = m.containerManager.StopContainer(sessionID) // Clean up container
 				return nil, fmt.Errorf("failed to log session creation: %w", err)
 			}
 		}
@@ -188,7 +193,8 @@ func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Sessio
 
 	// Send ACP initialize
 	if err := sess.SendInitialize(); err != nil {
-		m.CloseSession(sessionID)
+		//nolint:contextcheck // cleanup call in error path
+		_ = m.CloseSession(sessionID)
 		return nil, fmt.Errorf("failed to initialize agent: %w", err)
 	}
 
@@ -205,7 +211,8 @@ func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Sessio
 		}
 	}
 	if err := sess.SendSessionNew(agentWorkingDir); err != nil {
-		m.CloseSession(sessionID)
+		//nolint:contextcheck // cleanup call in error path
+		_ = m.CloseSession(sessionID)
 		return nil, fmt.Errorf("failed to create agent session: %w", err)
 	}
 
@@ -245,7 +252,7 @@ func (m *Manager) CloseSession(sessionID string) error {
 	sess.Cancel()
 
 	// Wait for process to exit and all goroutines to finish
-	sess.AgentCmd.Wait()
+	_ = sess.AgentCmd.Wait()
 
 	// Close channels after process has exited to prevent race conditions
 	close(sess.ToAgent)

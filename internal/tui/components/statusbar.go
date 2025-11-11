@@ -79,7 +79,7 @@ func (s *StatusBar) View() string {
 	plainShortcuts := stripAnsiForWidth(shortcuts)
 
 	contentWidth := len(plainLeft) + len(plainShortcuts) + 3 // 3 for separator " | "
-	padding := s.width - contentWidth - 4 // 4 for the style padding
+	padding := s.width - contentWidth - 4                    // 4 for the style padding
 
 	if padding < 1 {
 		padding = 1
@@ -93,7 +93,7 @@ func (s *StatusBar) View() string {
 		Render(fullContent)
 }
 
-// stripAnsiForWidth removes ANSI codes to calculate actual display width
+// stripAnsiForWidth removes ANSI codes to calculate actual display width.
 func stripAnsiForWidth(s string) string {
 	result := strings.Builder{}
 	inEscape := false

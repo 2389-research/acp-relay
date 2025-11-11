@@ -58,13 +58,13 @@ func TestFilterAllowedEnvVars(t *testing.T) {
 	m := &Manager{}
 
 	input := map[string]string{
-		"TERM":            "xterm-256color",
-		"LANG":            "en_US.UTF-8",
-		"LC_ALL":          "en_US.UTF-8",
-		"COLORTERM":       "truecolor",
-		"HOME":            "/home/user",           // Should be filtered
-		"PATH":            "/usr/bin",             // Should be filtered
-		"SECRET_API_KEY":  "sensitive",            // Should be filtered
+		"TERM":              "xterm-256color",
+		"LANG":              "en_US.UTF-8",
+		"LC_ALL":            "en_US.UTF-8",
+		"COLORTERM":         "truecolor",
+		"HOME":              "/home/user",       // Should be filtered
+		"PATH":              "/usr/bin",         // Should be filtered
+		"SECRET_API_KEY":    "sensitive",        // Should be filtered
 		"ANTHROPIC_API_KEY": "sk-ant-api03-...", // Should be filtered
 	}
 
@@ -226,6 +226,6 @@ func TestContainerReuse_FullFlow(t *testing.T) {
 	}
 
 	// Cleanup
-	m.StopContainer(sessionID)
-	m.dockerClient.ContainerRemove(ctx, containerID1, container.RemoveOptions{Force: true})
+	_ = m.StopContainer(sessionID)
+	_ = m.dockerClient.ContainerRemove(ctx, containerID1, container.RemoveOptions{Force: true})
 }

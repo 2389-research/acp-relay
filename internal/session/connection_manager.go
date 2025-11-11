@@ -24,7 +24,7 @@ type ConnectionManager struct {
 type ClientConnection struct {
 	id           string
 	conn         *websocket.Conn
-	writeMu      sync.Mutex   // protects WebSocket writes (gorilla requires mutex)
+	writeMu      sync.Mutex // protects WebSocket writes (gorilla requires mutex)
 	buffer       [][]byte
 	deliveryChan chan struct{}
 	attached     time.Time
@@ -63,7 +63,7 @@ func (cm *ConnectionManager) AttachClient(conn *websocket.Conn) string {
 }
 
 // SafeWriteMessage writes a message to a client's WebSocket using the write mutex
-// This is used by the WebSocket handler for sending JSON-RPC responses
+// This is used by the WebSocket handler for sending JSON-RPC responses.
 func (cm *ConnectionManager) SafeWriteMessage(clientID string, messageType int, data []byte) error {
 	cm.mu.RLock()
 	client, exists := cm.connections[clientID]
@@ -146,7 +146,7 @@ func (cm *ConnectionManager) broadcastToClients(msg []byte) {
 }
 
 // BroadcastError sends an error notification to all connected clients
-// This is used when the agent process crashes or exits unexpectedly
+// This is used when the agent process crashes or exits unexpectedly.
 func (cm *ConnectionManager) BroadcastError(errorMessage string) {
 	log.Printf("[%s] Broadcasting error to all clients: %s", cm.session.ID[:8], errorMessage)
 

@@ -45,7 +45,7 @@ func (c *RelayClient) Connect() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	conn, _, err := websocket.DefaultDialer.DialContext(ctx, c.url, nil)
+	conn, _, err := websocket.DefaultDialer.DialContext(ctx, c.url, nil) //nolint:bodyclose // websocket connection, not HTTP response //nolint:bodyclose // websocket connection, not HTTP response
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}

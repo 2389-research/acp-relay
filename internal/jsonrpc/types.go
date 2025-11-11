@@ -25,7 +25,7 @@ type Error struct {
 	Data    json.RawMessage `json:"data,omitempty"`
 }
 
-// Standard JSON-RPC error codes
+// Standard JSON-RPC error codes.
 const (
 	ParseError     = -32700
 	InvalidRequest = -32600

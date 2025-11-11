@@ -30,7 +30,7 @@ const (
 	DirectionRelayToClient MessageDirection = "relay_to_client"
 )
 
-// Open opens or creates the SQLite database
+// Open opens or creates the SQLite database.
 func Open(dbPath string) (*DB, error) {
 	conn, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
@@ -39,13 +39,13 @@ func Open(dbPath string) (*DB, error) {
 
 	// Enable WAL mode for better concurrency
 	if _, err := conn.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to enable WAL mode: %w", err)
 	}
 
 	// Create tables
 	if _, err := conn.Exec(schemaSQL); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to create schema: %w", err)
 	}
 
@@ -53,7 +53,7 @@ func Open(dbPath string) (*DB, error) {
 	return &DB{conn: conn}, nil
 }
 
-// Close closes the database connection
+// Close closes the database connection.
 func (db *DB) Close() error {
 	if db.conn != nil {
 		return db.conn.Close()
@@ -61,7 +61,7 @@ func (db *DB) Close() error {
 	return nil
 }
 
-// CreateSession logs a new session
+// CreateSession logs a new session.
 func (db *DB) CreateSession(sessionID, workingDir string) error {
 	_, err := db.conn.Exec(
 		"INSERT INTO sessions (id, working_directory) VALUES (?, ?)",
@@ -73,7 +73,7 @@ func (db *DB) CreateSession(sessionID, workingDir string) error {
 	return nil
 }
 
-// UpdateSessionAgentID updates the agent session ID after it's received
+// UpdateSessionAgentID updates the agent session ID after it's received.
 func (db *DB) UpdateSessionAgentID(sessionID, agentSessionID string) error {
 	_, err := db.conn.Exec(
 		"UPDATE sessions SET agent_session_id = ? WHERE id = ?",
@@ -85,7 +85,7 @@ func (db *DB) UpdateSessionAgentID(sessionID, agentSessionID string) error {
 	return nil
 }
 
-// CloseSession marks a session as closed
+// CloseSession marks a session as closed.
 func (db *DB) CloseSession(sessionID string) error {
 	_, err := db.conn.Exec(
 		"UPDATE sessions SET closed_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -97,7 +97,7 @@ func (db *DB) CloseSession(sessionID string) error {
 	return nil
 }
 
-// CloseAllOpenSessions marks all open sessions as closed (for startup maintenance)
+// CloseAllOpenSessions marks all open sessions as closed (for startup maintenance).
 func (db *DB) CloseAllOpenSessions() (int64, error) {
 	result, err := db.conn.Exec(
 		"UPDATE sessions SET closed_at = CURRENT_TIMESTAMP WHERE closed_at IS NULL",
@@ -109,13 +109,14 @@ func (db *DB) CloseAllOpenSessions() (int64, error) {
 	return rowsAffected, nil
 }
 
-// LogMessage logs a message with direction and parsed details
+// LogMessage logs a message with direction and parsed details.
 func (db *DB) LogMessage(sessionID string, direction MessageDirection, rawMessage []byte) error {
 	// Parse message to extract useful fields
 	var msg map[string]interface{}
 	var messageType, method string
 	var jsonrpcID *int64
 
+	//nolint:nestif // JSON parsing requires nested checks for different message types
 	if err := json.Unmarshal(rawMessage, &msg); err == nil {
 		// Determine message type
 		if _, hasMethod := msg["method"]; hasMethod {
@@ -159,7 +160,7 @@ func (db *DB) LogMessage(sessionID string, direction MessageDirection, rawMessag
 	return nil
 }
 
-// GetSessionMessages retrieves all messages for a session
+// GetSessionMessages retrieves all messages for a session.
 func (db *DB) GetSessionMessages(sessionID string) ([]Message, error) {
 	rows, err := db.conn.Query(
 		`SELECT id, session_id, direction, message_type, method, jsonrpc_id, raw_message, timestamp
@@ -169,7 +170,7 @@ func (db *DB) GetSessionMessages(sessionID string) ([]Message, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query messages: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var messages []Message
 	for rows.Next() {
@@ -199,7 +200,7 @@ func (db *DB) GetSessionMessages(sessionID string) ([]Message, error) {
 	return messages, nil
 }
 
-// Message represents a logged message
+// Message represents a logged message.
 type Message struct {
 	ID          int64
 	SessionID   string
@@ -211,7 +212,7 @@ type Message struct {
 	Timestamp   time.Time
 }
 
-// GetAllSessions retrieves all sessions
+// GetAllSessions retrieves all sessions.
 func (db *DB) GetAllSessions() ([]Session, error) {
 	rows, err := db.conn.Query(
 		`SELECT id, agent_session_id, working_directory, created_at, closed_at
@@ -220,7 +221,7 @@ func (db *DB) GetAllSessions() ([]Session, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query sessions: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var sessions []Session
 	for rows.Next() {
@@ -246,7 +247,7 @@ func (db *DB) GetAllSessions() ([]Session, error) {
 	return sessions, nil
 }
 
-// Session represents a logged session
+// Session represents a logged session.
 type Session struct {
 	ID               string
 	AgentSessionID   string

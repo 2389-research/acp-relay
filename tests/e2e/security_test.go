@@ -14,6 +14,7 @@ import (
 	"github.com/harper/acp-relay/internal/container"
 )
 
+//nolint:funlen // security test with container validation
 func TestSecurity_EnvironmentIsolation(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
@@ -52,12 +53,13 @@ func TestSecurity_EnvironmentIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
-	defer m.StopContainer(sessionID)
+	defer func() { _ = m.StopContainer(sessionID) }()
 
 	// Give container time to start
 	time.Sleep(2 * time.Second)
 
 	// Execute env command in container
+	//nolint:gosec // test docker exec command with controlled container
 	execCmd := exec.CommandContext(ctx, "docker", "exec", components.ContainerID, "env")
 	output, err := execCmd.CombinedOutput()
 	if err != nil {

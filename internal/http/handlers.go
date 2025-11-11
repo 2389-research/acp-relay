@@ -16,6 +16,7 @@ import (
 	"github.com/harper/acp-relay/internal/jsonrpc"
 )
 
+//nolint:funlen // HTTP handler with protocol logic
 func (s *Server) handleSessionNew(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -27,7 +28,7 @@ func (s *Server) handleSessionNew(w http.ResponseWriter, r *http.Request) {
 		writeLLMError(w, errors.NewInvalidRequestError(fmt.Sprintf("failed to read body: %v", err)), nil)
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var req jsonrpc.Request
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -46,6 +47,7 @@ func (s *Server) handleSessionNew(w http.ResponseWriter, r *http.Request) {
 
 	// Create session
 	// Use context.Background() because session should outlive this HTTP request
+	//nolint:contextcheck // session must outlive HTTP request
 	sess, err := s.sessionMgr.CreateSession(context.Background(), params.WorkingDirectory)
 	if err != nil {
 		writeLLMError(w, errors.NewAgentConnectionError(params.WorkingDirectory, 1, 10000, err.Error()), req.ID)
@@ -89,6 +91,7 @@ func (s *Server) handleSessionNew(w http.ResponseWriter, r *http.Request) {
 	writeResponse(w, result, req.ID)
 }
 
+//nolint:gocognit,funlen // complex HTTP polling logic requiring extensive protocol translation and error handling
 func (s *Server) handleSessionPrompt(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -100,7 +103,7 @@ func (s *Server) handleSessionPrompt(w http.ResponseWriter, r *http.Request) {
 		writeLLMError(w, errors.NewInvalidRequestError(fmt.Sprintf("failed to read body: %v", err)), nil)
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var req jsonrpc.Request
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -128,9 +131,13 @@ func (s *Server) handleSessionPrompt(w http.ResponseWriter, r *http.Request) {
 	// Forward request to agent, translating "content" to "prompt" and using agent's session ID
 	agentParams := map[string]interface{}{
 		"sessionId": sess.AgentSessionID, // Use agent's session ID, not relay's
-		"prompt":    json.RawMessage(params.Content),
+		"prompt":    params.Content,
 	}
-	agentParamsJSON, _ := json.Marshal(agentParams)
+	agentParamsJSON, err := json.Marshal(agentParams)
+	if err != nil {
+		writeLLMError(w, errors.NewInternalError(fmt.Sprintf("failed to marshal params: %v", err)), req.ID)
+		return
+	}
 
 	agentReq := jsonrpc.Request{
 		JSONRPC: "2.0",
@@ -139,7 +146,11 @@ func (s *Server) handleSessionPrompt(w http.ResponseWriter, r *http.Request) {
 		ID:      req.ID,
 	}
 
-	reqData, _ := json.Marshal(agentReq)
+	reqData, err := json.Marshal(agentReq)
+	if err != nil {
+		writeLLMError(w, errors.NewInternalError(fmt.Sprintf("failed to marshal request: %v", err)), req.ID)
+		return
+	}
 	reqData = append(reqData, '\n')
 
 	log.Printf("[HTTP:%s] Sending prompt to agent (reqID=%s)", params.SessionID[:8], string(*req.ID))
@@ -197,24 +208,39 @@ func (s *Server) handleSessionPrompt(w http.ResponseWriter, r *http.Request) {
 		// Look for the final response with matching ID
 		for _, respData := range messages {
 			var resp map[string]interface{}
+			//nolint:nestif // response parsing requires deep nesting for comprehensive error handling
 			if err := json.Unmarshal(respData, &resp); err == nil {
 				if idField, ok := resp["id"]; ok {
 					// This is a response (not a notification)
-					idBytes, _ := json.Marshal(idField)
+					idBytes, err := json.Marshal(idField)
+					if err != nil {
+						continue // Skip this message if we can't marshal the ID
+					}
 					msgID := string(idBytes)
 					if msgID == requestID {
 						// This is the response to our request - turn is complete
 						log.Printf("[HTTP:%s] ✓ Found matching response! Poll #%d, returning %d messages", params.SessionID[:8], pollCount, len(messages))
 						w.Header().Set("Content-Type", "application/json")
 						// Return all messages as a JSON array
-						w.Write([]byte("["))
+						if _, err := w.Write([]byte("[")); err != nil {
+							log.Printf("[HTTP:%s] Error writing response: %v", params.SessionID[:8], err)
+							return
+						}
 						for i, msg := range messages {
 							if i > 0 {
-								w.Write([]byte(","))
+								if _, err := w.Write([]byte(",")); err != nil {
+									log.Printf("[HTTP:%s] Error writing response: %v", params.SessionID[:8], err)
+									return
+								}
 							}
-							w.Write(msg)
+							if _, err := w.Write(msg); err != nil {
+								log.Printf("[HTTP:%s] Error writing response: %v", params.SessionID[:8], err)
+								return
+							}
 						}
-						w.Write([]byte("]"))
+						if _, err := w.Write([]byte("]")); err != nil {
+							log.Printf("[HTTP:%s] Error writing response: %v", params.SessionID[:8], err)
+						}
 						return
 					}
 				}
@@ -227,7 +253,11 @@ func (s *Server) handleSessionPrompt(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeResponse(w http.ResponseWriter, result interface{}, id *json.RawMessage) {
-	resultData, _ := json.Marshal(result)
+	resultData, err := json.Marshal(result)
+	if err != nil {
+		writeError(w, -32603, fmt.Sprintf("failed to marshal result: %v", err), id)
+		return
+	}
 
 	resp := jsonrpc.Response{
 		JSONRPC: "2.0",
@@ -236,7 +266,9 @@ func writeResponse(w http.ResponseWriter, result interface{}, id *json.RawMessag
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 func writeError(w http.ResponseWriter, code int, message string, id *json.RawMessage) {
@@ -251,7 +283,9 @@ func writeError(w http.ResponseWriter, code int, message string, id *json.RawMes
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK) // JSON-RPC errors still return 200
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("Error encoding error response: %v", err)
+	}
 }
 
 func writeLLMError(w http.ResponseWriter, err *jsonrpc.Error, id *json.RawMessage) {
@@ -263,5 +297,7 @@ func writeLLMError(w http.ResponseWriter, err *jsonrpc.Error, id *json.RawMessag
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK) // JSON-RPC errors still return 200
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("Error encoding LLM error response: %v", err)
+	}
 }

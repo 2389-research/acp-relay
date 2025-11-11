@@ -148,13 +148,13 @@ func (sm *SessionManager) Rename(id, newName string) error {
 	return nil
 }
 
-// Save persists all sessions to disk
+// Save persists all sessions to disk.
 func (sm *SessionManager) Save(dataDir string) error {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 
 	sessionsDir := filepath.Join(dataDir, "sessions")
-	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+	if err := os.MkdirAll(sessionsDir, 0750); err != nil {
 		return fmt.Errorf("create sessions dir: %w", err)
 	}
 
@@ -165,7 +165,7 @@ func (sm *SessionManager) Save(dataDir string) error {
 		}
 
 		path := filepath.Join(sessionsDir, sess.ID+".json")
-		if err := os.WriteFile(path, data, 0644); err != nil {
+		if err := os.WriteFile(path, data, 0600); err != nil {
 			return fmt.Errorf("write session %s: %w", sess.ID, err)
 		}
 	}
@@ -173,7 +173,7 @@ func (sm *SessionManager) Save(dataDir string) error {
 	return nil
 }
 
-// Load restores sessions from disk
+// Load restores sessions from disk.
 func (sm *SessionManager) Load(dataDir string) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -181,7 +181,7 @@ func (sm *SessionManager) Load(dataDir string) error {
 	sessionsDir := filepath.Join(dataDir, "sessions")
 
 	// Create directory if it doesn't exist
-	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+	if err := os.MkdirAll(sessionsDir, 0750); err != nil {
 		return fmt.Errorf("create sessions dir: %w", err)
 	}
 
@@ -197,6 +197,7 @@ func (sm *SessionManager) Load(dataDir string) error {
 		}
 
 		path := filepath.Join(sessionsDir, entry.Name())
+		//nolint:gosec // session file path from validated directory
 		data, err := os.ReadFile(path)
 		if err != nil {
 			// Log error but continue loading other sessions

@@ -31,7 +31,7 @@ Client → HTTP/WS → Relay → Docker API → Container → Agent (isolated)
 
 ### Key Changes
 1. **Process Spawn** → **Container Creation**
-2. **OS Process** → **Docker Container** 
+2. **OS Process** → **Docker Container**
 3. **Filesystem Access** → **Volume Mounts**
 4. **Process Kill** → **Container Stop/Remove**
 
@@ -43,7 +43,7 @@ Client → HTTP/WS → Relay → Docker API → Container → Agent (isolated)
 
 ```bash
 # Check Docker is installed
-docker --version  # Should be 24.0+ 
+docker --version  # Should be 24.0+
 
 # Check Go version
 go version  # Should be 1.23+
@@ -212,29 +212,29 @@ import (
 type Config struct {
     // Image name for the agent container
     Image string `mapstructure:"image"`
-    
+
     // Resource limits
     MemoryLimit string `mapstructure:"memory_limit"` // e.g., "2G", "512M"
     CPULimit    float64 `mapstructure:"cpu_limit"`    // e.g., 0.5 = 50% of one CPU
-    
+
     // Networking
     NetworkMode string `mapstructure:"network_mode"` // "none", "bridge", "host"
-    
+
     // Security
     ReadOnlyRootFS bool     `mapstructure:"readonly_rootfs"`
     DropCaps       []string `mapstructure:"drop_capabilities"`
     SecurityOpt    []string `mapstructure:"security_opt"`
-    
+
     // Volumes
     WorkspaceBaseDir string   `mapstructure:"workspace_base_dir"` // Host directory for workspaces
     ExtraVolumes     []string `mapstructure:"extra_volumes"`      // Additional volume mounts
-    
+
     // Behavior
     AutoRemove      bool          `mapstructure:"auto_remove"`
     PullPolicy      string        `mapstructure:"pull_policy"` // "always", "never", "missing"
     StartupTimeout  time.Duration `mapstructure:"startup_timeout"`
     ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout"`
-    
+
     // Logging
     LogDriver string            `mapstructure:"log_driver"`
     LogOpts   map[string]string `mapstructure:"log_opts"`
@@ -267,14 +267,14 @@ func ParseMemoryLimit(limit string) (int64, error) {
     if limit == "" {
         return 0, nil
     }
-    
+
     // Simple parsing - expand this as needed
     multipliers := map[byte]int64{
         'K': 1024,
         'M': 1024 * 1024,
         'G': 1024 * 1024 * 1024,
     }
-    
+
     lastChar := limit[len(limit)-1]
     if multiplier, ok := multipliers[lastChar]; ok {
         var value int64
@@ -284,7 +284,7 @@ func ParseMemoryLimit(limit string) (int64, error) {
         }
         return value * multiplier, nil
     }
-    
+
     // Assume bytes if no suffix
     var value int64
     _, err := fmt.Sscanf(limit, "%d", &value)
@@ -310,7 +310,7 @@ import (
     "path/filepath"
     "sync"
     "time"
-    
+
     "github.com/docker/docker/api/types"
     "github.com/docker/docker/api/types/container"
     "github.com/docker/docker/api/types/mount"
@@ -329,15 +329,15 @@ type Container struct {
     ID          string
     SessionID   string
     WorkspaceDir string
-    
+
     // Docker attachment hijacked connection
     Conn        types.HijackedResponse
-    
+
     // Wrapped stdio
     Stdin       io.WriteCloser
     Stdout      io.ReadCloser
     Stderr      io.ReadCloser
-    
+
     // Lifecycle
     StartedAt   time.Time
     Context     context.Context
@@ -354,16 +354,16 @@ func NewManager(cfg *Config) (*Manager, error) {
     if err != nil {
         return nil, fmt.Errorf("failed to create Docker client: %w", err)
     }
-    
+
     // Verify Docker is accessible
     ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
     defer cancel()
-    
+
     _, err = cli.Ping(ctx)
     if err != nil {
         return nil, fmt.Errorf("Docker daemon not accessible: %w", err)
     }
-    
+
     // Check if image exists (if pull policy is not "always")
     if cfg.PullPolicy != "always" {
         _, _, err = cli.ImageInspectWithRaw(ctx, cfg.Image)
@@ -378,7 +378,7 @@ func NewManager(cfg *Config) (*Manager, error) {
             }
         }
     }
-    
+
     return &Manager{
         client:     cli,
         config:     cfg,
@@ -390,33 +390,33 @@ func NewManager(cfg *Config) (*Manager, error) {
 func (m *Manager) CreateContainer(ctx context.Context, sessionID string, workingDir string) (*Container, error) {
     m.mu.Lock()
     defer m.mu.Unlock()
-    
+
     // Check if container already exists for this session
     if _, exists := m.containers[sessionID]; exists {
         return nil, fmt.Errorf("container already exists for session %s", sessionID)
     }
-    
+
     // Create unique container name
     containerName := fmt.Sprintf("acp-agent-%s-%s", sessionID[:8], uuid.New().String()[:8])
-    
+
     // Parse memory limit
     memoryLimit, err := ParseMemoryLimit(m.config.MemoryLimit)
     if err != nil {
         return nil, fmt.Errorf("invalid memory limit: %w", err)
     }
-    
+
     // Create workspace directory on host
     hostWorkspace := filepath.Join(m.config.WorkspaceBaseDir, sessionID)
     if err := os.MkdirAll(hostWorkspace, 0755); err != nil {
         return nil, fmt.Errorf("failed to create workspace directory: %w", err)
     }
-    
+
     // Container configuration
     containerConfig := &container.Config{
         Image:        m.config.Image,
         Hostname:     containerName,
         WorkingDir:   "/workspace",
-        
+
         // Attach to stdio
         AttachStdin:  true,
         AttachStdout: true,
@@ -424,14 +424,14 @@ func (m *Manager) CreateContainer(ctx context.Context, sessionID string, working
         OpenStdin:    true,
         StdinOnce:    false,
         Tty:          false,
-        
+
         // Environment variables
         Env: []string{
             fmt.Sprintf("SESSION_ID=%s", sessionID),
             "AGENT_CONTAINER=true",
             fmt.Sprintf("WORKSPACE=%s", "/workspace"),
         },
-        
+
         // Labels for management
         Labels: map[string]string{
             "acp.relay":    "true",
@@ -439,7 +439,7 @@ func (m *Manager) CreateContainer(ctx context.Context, sessionID string, working
             "acp.created":  time.Now().Format(time.RFC3339),
         },
     }
-    
+
     // Host configuration
     hostConfig := &container.HostConfig{
         // Resource limits
@@ -448,10 +448,10 @@ func (m *Manager) CreateContainer(ctx context.Context, sessionID string, working
             CPUQuota: int64(m.config.CPULimit * 100000), // Convert to microseconds
             CPUPeriod: 100000,
         },
-        
+
         // Networking
         NetworkMode: container.NetworkMode(m.config.NetworkMode),
-        
+
         // Volumes
         Mounts: []mount.Mount{
             {
@@ -463,22 +463,22 @@ func (m *Manager) CreateContainer(ctx context.Context, sessionID string, working
                 },
             },
         },
-        
+
         // Security
         ReadonlyRootfs: m.config.ReadOnlyRootFS,
         CapDrop:       m.config.DropCaps,
         SecurityOpt:   m.config.SecurityOpt,
-        
+
         // Cleanup
         AutoRemove: m.config.AutoRemove,
-        
+
         // Logging
         LogConfig: container.LogConfig{
             Type:   m.config.LogDriver,
             Config: m.config.LogOpts,
         },
     }
-    
+
     // Add extra volumes if configured
     for _, vol := range m.config.ExtraVolumes {
         parts := strings.Split(vol, ":")
@@ -493,7 +493,7 @@ func (m *Manager) CreateContainer(ctx context.Context, sessionID string, working
             ReadOnly: true,
         })
     }
-    
+
     // Create the container
     createResp, err := m.client.ContainerCreate(
         ctx,
@@ -506,20 +506,20 @@ func (m *Manager) CreateContainer(ctx context.Context, sessionID string, working
     if err != nil {
         return nil, fmt.Errorf("failed to create container: %w", err)
     }
-    
+
     containerID := createResp.ID
     log.Printf("Created container %s for session %s", containerID[:12], sessionID[:8])
-    
+
     // Start the container
     startCtx, cancel := context.WithTimeout(ctx, m.config.StartupTimeout)
     defer cancel()
-    
+
     if err := m.client.ContainerStart(startCtx, containerID, types.ContainerStartOptions{}); err != nil {
         // Clean up container if start fails
         m.client.ContainerRemove(context.Background(), containerID, types.ContainerRemoveOptions{Force: true})
         return nil, fmt.Errorf("failed to start container: %w", err)
     }
-    
+
     // Attach to container stdio
     attachResp, err := m.client.ContainerAttach(ctx, containerID, types.ContainerAttachOptions{
         Stream: true,
@@ -532,10 +532,10 @@ func (m *Manager) CreateContainer(ctx context.Context, sessionID string, working
         m.client.ContainerStop(context.Background(), containerID, container.StopOptions{})
         return nil, fmt.Errorf("failed to attach to container: %w", err)
     }
-    
+
     // Create container context
     containerCtx, containerCancel := context.WithCancel(ctx)
-    
+
     // Create Container object
     cnt := &Container{
         ID:           containerID,
@@ -549,13 +549,13 @@ func (m *Manager) CreateContainer(ctx context.Context, sessionID string, working
         Context:      containerCtx,
         Cancel:       containerCancel,
     }
-    
+
     // Store in map
     m.containers[sessionID] = cnt
-    
+
     // Start monitoring goroutine
     go m.monitorContainer(cnt)
-    
+
     log.Printf("Container %s ready for session %s", containerID[:12], sessionID[:8])
     return cnt, nil
 }
@@ -564,28 +564,28 @@ func (m *Manager) CreateContainer(ctx context.Context, sessionID string, working
 func (m *Manager) StopContainer(sessionID string) error {
     m.mu.Lock()
     defer m.mu.Unlock()
-    
+
     cnt, exists := m.containers[sessionID]
     if !exists {
         return fmt.Errorf("no container for session %s", sessionID)
     }
-    
+
     log.Printf("Stopping container %s for session %s", cnt.ID[:12], sessionID[:8])
-    
+
     // Cancel context
     cnt.Cancel()
-    
+
     // Close connection
     cnt.Conn.Close()
-    
+
     // Stop container with timeout
     stopCtx, cancel := context.WithTimeout(context.Background(), m.config.ShutdownTimeout)
     defer cancel()
-    
+
     stopOptions := container.StopOptions{
         Timeout: int(m.config.ShutdownTimeout.Seconds()),
     }
-    
+
     if err := m.client.ContainerStop(stopCtx, cnt.ID, stopOptions); err != nil {
         log.Printf("Error stopping container %s: %v", cnt.ID[:12], err)
         // Force remove if stop fails
@@ -593,17 +593,17 @@ func (m *Manager) StopContainer(sessionID string) error {
             Force: true,
         })
     }
-    
+
     // Remove from map
     delete(m.containers, sessionID)
-    
+
     // Clean up workspace if configured
     if m.config.AutoRemove {
         if err := os.RemoveAll(cnt.WorkspaceDir); err != nil {
             log.Printf("Failed to clean workspace %s: %v", cnt.WorkspaceDir, err)
         }
     }
-    
+
     return nil
 }
 
@@ -611,7 +611,7 @@ func (m *Manager) StopContainer(sessionID string) error {
 func (m *Manager) GetContainer(sessionID string) (*Container, bool) {
     m.mu.RLock()
     defer m.mu.RUnlock()
-    
+
     cnt, exists := m.containers[sessionID]
     return cnt, exists
 }
@@ -620,7 +620,7 @@ func (m *Manager) GetContainer(sessionID string) (*Container, bool) {
 func (m *Manager) monitorContainer(cnt *Container) {
     ticker := time.NewTicker(5 * time.Second)
     defer ticker.Stop()
-    
+
     for {
         select {
         case <-cnt.Context.Done():
@@ -641,13 +641,13 @@ func (m *Manager) monitorContainer(cnt *Container) {
 func pullImage(cli *client.Client, imageName string) error {
     ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
     defer cancel()
-    
+
     reader, err := cli.ImagePull(ctx, imageName, types.ImagePullOptions{})
     if err != nil {
         return err
     }
     defer reader.Close()
-    
+
     // Read the output (important to consume it)
     _, err = io.Copy(io.Discard, reader)
     return err
@@ -657,19 +657,19 @@ func pullImage(cli *client.Client, imageName string) error {
 func (m *Manager) Cleanup() error {
     m.mu.Lock()
     defer m.mu.Unlock()
-    
+
     var errors []error
-    
+
     for sessionID := range m.containers {
         if err := m.StopContainer(sessionID); err != nil {
             errors = append(errors, fmt.Errorf("failed to stop container for session %s: %w", sessionID, err))
         }
     }
-    
+
     if len(errors) > 0 {
         return fmt.Errorf("cleanup errors: %v", errors)
     }
-    
+
     return nil
 }
 ```
@@ -698,7 +698,7 @@ type Manager struct {
 func NewManager(cfg ManagerConfig, database *db.DB, containerCfg *container.Config) *Manager {
     var containerMgr *container.Manager
     useContainers := false
-    
+
     if containerCfg != nil && containerCfg.Image != "" {
         var err error
         containerMgr, err = container.NewManager(containerCfg)
@@ -710,7 +710,7 @@ func NewManager(cfg ManagerConfig, database *db.DB, containerCfg *container.Conf
             log.Printf("Container manager initialized, using Docker containers for agents")
         }
     }
-    
+
     return &Manager{
         config:        cfg,
         sessions:      make(map[string]*Session),
@@ -723,7 +723,7 @@ func NewManager(cfg ManagerConfig, database *db.DB, containerCfg *container.Conf
 // Update CreateSession
 func (m *Manager) CreateSession(ctx context.Context, workingDir string) (*Session, error) {
     sessionID := "sess_" + uuid.New().String()[:8]
-    
+
     if m.useContainers {
         return m.createContainerSession(ctx, sessionID, workingDir)
     } else {
@@ -738,7 +738,7 @@ func (m *Manager) createContainerSession(ctx context.Context, sessionID string, 
     if err != nil {
         return nil, fmt.Errorf("failed to create container: %w", err)
     }
-    
+
     // Create session
     sess := &Session{
         ID:           sessionID,
@@ -754,7 +754,7 @@ func (m *Manager) createContainerSession(ctx context.Context, sessionID string, 
         DB:           m.db,
         IsContainer:  true,
     }
-    
+
     // Log session creation
     if m.db != nil {
         if err := m.db.CreateSession(sessionID, workingDir); err != nil {
@@ -762,25 +762,25 @@ func (m *Manager) createContainerSession(ctx context.Context, sessionID string, 
             return nil, fmt.Errorf("failed to log session creation: %w", err)
         }
     }
-    
+
     m.mu.Lock()
     m.sessions[sessionID] = sess
     m.mu.Unlock()
-    
+
     // Start stdio bridge
     go sess.StartStdioBridge()
-    
+
     // Send initialize and session/new
     if err := sess.SendInitialize(); err != nil {
         m.CloseSession(sessionID)
         return nil, fmt.Errorf("failed to initialize agent: %w", err)
     }
-    
+
     if err := sess.SendSessionNew(workingDir); err != nil {
         m.CloseSession(sessionID)
         return nil, fmt.Errorf("failed to create agent session: %w", err)
     }
-    
+
     return sess, nil
 }
 
@@ -799,14 +799,14 @@ func (m *Manager) CloseSession(sessionID string) error {
     }
     delete(m.sessions, sessionID)
     m.mu.Unlock()
-    
+
     // Log closure
     if m.db != nil {
         if err := m.db.CloseSession(sessionID); err != nil {
             log.Printf("failed to log session closure: %v", err)
         }
     }
-    
+
     // Handle container vs process cleanup
     if sess.IsContainer && m.containerMgr != nil {
         return m.containerMgr.StopContainer(sessionID)
@@ -832,14 +832,14 @@ type Session struct {
     ID             string
     AgentSessionID string
     WorkingDir     string
-    
+
     // Process mode fields
     AgentCmd       *exec.Cmd
-    
+
     // Container mode fields
     ContainerID    string
     IsContainer    bool
-    
+
     // Common fields
     AgentStdin     io.WriteCloser
     AgentStdout    io.ReadCloser
@@ -849,7 +849,7 @@ type Session struct {
     Context        context.Context
     Cancel         context.CancelFunc
     DB             *db.DB
-    
+
     // For HTTP
     MessageBuffer [][]byte
     BufferMutex   sync.Mutex
@@ -914,32 +914,32 @@ agent:
 container:
   enabled: true  # Set to false to use process-based agents
   image: "acp-agent:latest"
-  
+
   # Resource limits
   memory_limit: "2G"      # Memory limit (K, M, G suffix)
   cpu_limit: 1.0          # CPU cores (1.0 = 100% of 1 core)
-  
+
   # Networking
   network_mode: "none"    # Options: none, bridge, host
-  
+
   # Storage
   workspace_base_dir: "/var/lib/acp-relay/workspaces"
   auto_remove: true       # Remove container and workspace on session end
-  
+
   # Docker behavior
   pull_policy: "missing"  # Options: always, never, missing
-  
+
   # Security
   readonly_rootfs: false  # Make root filesystem read-only
   drop_capabilities:      # Linux capabilities to drop
     - "NET_RAW"
     - "SYS_ADMIN"
   security_opt: []        # Security options (e.g., "no-new-privileges")
-  
+
   # Additional volumes to mount (read-only)
   extra_volumes:
     # - "/usr/share/docs:/docs:ro"
-  
+
   # Logging
   log_driver: "json-file"
   log_opts:
@@ -1007,7 +1007,7 @@ func NewContainerStartError(image string, details string) *jsonrpc.Error {
         "Docker is not running, the image doesn't exist, or there are insufficient resources.",
         image,
     )
-    
+
     data := LLMErrorData{
         ErrorType:   "container_start_failed",
         Explanation: "The relay server could not create or start a Docker container for the agent.",
@@ -1033,7 +1033,7 @@ func NewContainerStartError(image string, details string) *jsonrpc.Error {
         Recoverable: true,
         Details:     details,
     }
-    
+
     dataBytes, _ := json.Marshal(data)
     return &jsonrpc.Error{
         Code:    jsonrpc.ServerError,
@@ -1048,7 +1048,7 @@ func NewContainerResourceError(resource string, limit string, details string) *j
         "The agent requires more %s than allocated.",
         resource, limit, resource,
     )
-    
+
     data := LLMErrorData{
         ErrorType:   "container_resource_exceeded",
         Explanation: "The container hit a resource limit and was terminated or throttled.",
@@ -1071,7 +1071,7 @@ func NewContainerResourceError(resource string, limit string, details string) *j
         },
         Recoverable: true,
     }
-    
+
     dataBytes, _ := json.Marshal(data)
     return &jsonrpc.Error{
         Code:    jsonrpc.ServerError,
@@ -1083,7 +1083,7 @@ func NewContainerResourceError(resource string, limit string, details string) *j
 func NewDockerNotAvailableError(details string) *jsonrpc.Error {
     message := "Docker is not available or not properly configured. " +
         "The relay server requires Docker to run agent containers."
-    
+
     data := LLMErrorData{
         ErrorType:   "docker_not_available",
         Explanation: "The relay cannot connect to the Docker daemon.",
@@ -1107,7 +1107,7 @@ func NewDockerNotAvailableError(details string) *jsonrpc.Error {
         },
         Recoverable: false,
     }
-    
+
     dataBytes, _ := json.Marshal(data)
     return &jsonrpc.Error{
         Code:    jsonrpc.ServerError,
@@ -1139,43 +1139,43 @@ func TestContainerLifecycle(t *testing.T) {
     if !dockerAvailable() {
         t.Skip("Docker not available")
     }
-    
+
     cfg := DefaultConfig()
     cfg.Image = "alpine:latest" // Use small test image
-    
+
     mgr, err := NewManager(cfg)
     if err != nil {
         t.Fatalf("failed to create manager: %v", err)
     }
-    
+
     // Test container creation
     ctx := context.Background()
     sessionID := "test_session_123"
     workDir := t.TempDir()
-    
+
     cnt, err := mgr.CreateContainer(ctx, sessionID, workDir)
     if err != nil {
         t.Fatalf("failed to create container: %v", err)
     }
-    
+
     // Verify container is running
     if cnt.ID == "" {
         t.Error("container ID is empty")
     }
-    
+
     // Test writing to stdin
     testMsg := []byte("echo hello\n")
     _, err = cnt.Stdin.Write(testMsg)
     if err != nil {
         t.Errorf("failed to write to container: %v", err)
     }
-    
+
     // Test stopping container
     err = mgr.StopContainer(sessionID)
     if err != nil {
         t.Errorf("failed to stop container: %v", err)
     }
-    
+
     // Verify container is removed
     _, exists := mgr.GetContainer(sessionID)
     if exists {
@@ -1187,24 +1187,24 @@ func TestResourceLimits(t *testing.T) {
     if !dockerAvailable() {
         t.Skip("Docker not available")
     }
-    
+
     cfg := DefaultConfig()
     cfg.Image = "alpine:latest"
     cfg.MemoryLimit = "100M"
     cfg.CPULimit = 0.5
-    
+
     mgr, err := NewManager(cfg)
     if err != nil {
         t.Fatalf("failed to create manager: %v", err)
     }
-    
+
     ctx := context.Background()
     cnt, err := mgr.CreateContainer(ctx, "test_limits", t.TempDir())
     if err != nil {
         t.Fatalf("failed to create container: %v", err)
     }
     defer mgr.StopContainer("test_limits")
-    
+
     // Container should be created with limits
     // In real test, inspect container to verify limits
 }
@@ -1215,10 +1215,10 @@ func dockerAvailable() bool {
         return false
     }
     defer cli.Close()
-    
+
     ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
     defer cancel()
-    
+
     _, err = cli.Ping(ctx)
     return err == nil
 }
@@ -1243,10 +1243,10 @@ func TestContainerSession(t *testing.T) {
     // Start relay with container support
     startRelay(t, "test_config_containers.yaml")
     defer stopRelay(t)
-    
+
     // Wait for startup
     time.Sleep(3 * time.Second)
-    
+
     // Create session (should create container)
     sessionReq := map[string]interface{}{
         "jsonrpc": "2.0",
@@ -1256,7 +1256,7 @@ func TestContainerSession(t *testing.T) {
         },
         "id": 1,
     }
-    
+
     body, _ := json.Marshal(sessionReq)
     resp, err := http.Post(
         "http://localhost:8080/session/new",
@@ -1266,15 +1266,15 @@ func TestContainerSession(t *testing.T) {
     if err != nil {
         t.Fatalf("failed to create session: %v", err)
     }
-    
+
     var result map[string]interface{}
     json.NewDecoder(resp.Body).Decode(&result)
-    
+
     sessionID := result["result"].(map[string]interface{})["sessionId"].(string)
     if sessionID == "" {
         t.Fatal("no session ID returned")
     }
-    
+
     // Verify container was created
     containers := listContainers(t)
     found := false
@@ -1284,11 +1284,11 @@ func TestContainerSession(t *testing.T) {
             break
         }
     }
-    
+
     if !found {
         t.Error("container not found for session")
     }
-    
+
     // Test sending prompt
     promptReq := map[string]interface{}{
         "jsonrpc": "2.0",
@@ -1301,7 +1301,7 @@ func TestContainerSession(t *testing.T) {
         },
         "id": 2,
     }
-    
+
     // ... rest of test
 }
 
@@ -1620,4 +1620,3 @@ docker events \
 - [ ] Add container image versioning
 - [ ] Create upgrade procedures
 - [ ] Performance testing
-

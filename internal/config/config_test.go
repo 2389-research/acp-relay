@@ -15,11 +15,11 @@ server:
 agent:
   command: "/usr/local/bin/test-agent"
 `
-	err := os.WriteFile("test_config.yaml", []byte(content), 0644)
+	err := os.WriteFile("test_config.yaml", []byte(content), 0600)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove("test_config.yaml")
+	defer func() { _ = os.Remove("test_config.yaml") }()
 
 	cfg, err := Load("test_config.yaml")
 	if err != nil {
@@ -49,11 +49,11 @@ agent:
     lowercase_var: "test"
     MixedCase_Var: "test2"
 `
-	err := os.WriteFile("test_env_case.yaml", []byte(content), 0644)
+	err := os.WriteFile("test_env_case.yaml", []byte(content), 0600)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove("test_env_case.yaml")
+	defer func() { _ = os.Remove("test_env_case.yaml") }()
 
 	cfg, err := Load("test_env_case.yaml")
 	if err != nil {
@@ -107,7 +107,7 @@ database:
   path: "$XDG_DATA_HOME/db.sqlite"
 `
 
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -150,7 +150,7 @@ database:
   path: "/absolute/path/db.sqlite"
 `
 
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
 		t.Fatal(err)
 	}
 

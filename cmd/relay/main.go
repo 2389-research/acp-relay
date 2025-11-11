@@ -20,6 +20,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
+//nolint:funlen // main initialization function
 func main() {
 	// Load .env file if it exists (silently ignore if not found)
 	_ = godotenv.Load()
@@ -46,9 +47,13 @@ func main() {
 
 	// Parse flags after subcommand
 	if len(os.Args) > 1 && os.Args[1] == "serve" {
-		serveFlags.Parse(os.Args[2:])
+		if err := serveFlags.Parse(os.Args[2:]); err != nil {
+			log.Fatalf("failed to parse serve flags: %v", err)
+		}
 	} else {
-		serveFlags.Parse(os.Args[1:])
+		if err := serveFlags.Parse(os.Args[1:]); err != nil {
+			log.Fatalf("failed to parse flags: %v", err)
+		}
 	}
 
 	// Set logger verbosity
@@ -67,7 +72,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to open database: %v", err)
 	}
-	defer database.Close()
+	defer func() {
+		if err := database.Close(); err != nil {
+			log.Printf("failed to close database: %v", err)
+		}
+	}()
 
 	// Startup maintenance: mark all open sessions as closed (they crashed/were orphaned)
 	closedCount, err := database.CloseAllOpenSessions()
@@ -101,6 +110,7 @@ func main() {
 	go func() {
 		addr := fmt.Sprintf("%s:%d", cfg.Server.HTTPHost, cfg.Server.HTTPPort)
 		logger.Info("Starting HTTP server on %s", addr)
+		//nolint:gosec // http server for relay API - timeouts configured via reverse proxy
 		if err := http.ListenAndServe(addr, httpSrv); err != nil {
 			log.Fatalf("HTTP server failed: %v", err)
 		}
@@ -110,6 +120,7 @@ func main() {
 	go func() {
 		wsAddr := fmt.Sprintf("%s:%d", cfg.Server.WebSocketHost, cfg.Server.WebSocketPort)
 		logger.Info("Starting WebSocket server on %s", wsAddr)
+		//nolint:gosec // websocket server for agent communication - long-lived connections
 		if err := http.ListenAndServe(wsAddr, wsSrv); err != nil {
 			log.Fatalf("WebSocket server failed: %v", err)
 		}
@@ -118,7 +129,9 @@ func main() {
 	// Start management server on main goroutine (localhost only for security)
 	mgmtAddr := fmt.Sprintf("%s:%d", cfg.Server.ManagementHost, cfg.Server.ManagementPort)
 	logger.Info("Starting management API on %s", mgmtAddr)
+	//nolint:gosec // management API server - internal use only
 	if err := http.ListenAndServe(mgmtAddr, mgmtSrv); err != nil {
-		log.Fatalf("Management server failed: %v", err)
+		log.Printf("[ERROR] Management server failed: %v", err)
+		os.Exit(1) //nolint:gocritic // intentional exit on critical error
 	}
 }

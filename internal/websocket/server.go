@@ -37,11 +37,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//nolint:contextcheck // websocket connection outlives HTTP request context
 	s.handleConnection(conn)
 }
 
+//nolint:gocognit,gocyclo,funlen // complex websocket protocol handling requiring many protocol branches
 func (s *Server) handleConnection(conn *websocket.Conn) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	var currentSession *session.Session
 	var currentClientID string
@@ -179,7 +181,7 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			// Translate params from "content" to "prompt" and use agent's session ID
 			agentParams := map[string]interface{}{
 				"sessionId": currentSession.AgentSessionID, // Use agent's session ID, not relay's
-				"prompt":    json.RawMessage(params.Content),
+				"prompt":    params.Content,
 			}
 			agentParamsJSON, err := json.Marshal(agentParams)
 			if err != nil {
@@ -241,10 +243,6 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 	}
 }
 
-func (s *Server) sendResponse(conn *websocket.Conn, result interface{}, id *json.RawMessage) {
-	s.sendResponseSafe(conn, nil, "", result, id)
-}
-
 func (s *Server) sendResponseSafe(conn *websocket.Conn, sess *session.Session, clientID string, result interface{}, id *json.RawMessage) {
 	resultData, err := json.Marshal(result)
 	if err != nil {
@@ -272,26 +270,6 @@ func (s *Server) sendResponseSafe(conn *websocket.Conn, sess *session.Session, c
 		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 			log.Printf("Failed to write response to websocket: %v", err)
 		}
-	}
-}
-
-func (s *Server) sendError(conn *websocket.Conn, code int, message string, id *json.RawMessage) {
-	resp := jsonrpc.Response{
-		JSONRPC: "2.0",
-		Error: &jsonrpc.Error{
-			Code:    code,
-			Message: message,
-		},
-		ID: id,
-	}
-
-	data, err := json.Marshal(resp)
-	if err != nil {
-		log.Printf("Failed to marshal error response: %v", err)
-		return
-	}
-	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-		log.Printf("Failed to write error response: %v", err)
 	}
 }
 

@@ -12,7 +12,7 @@ import (
 	"github.com/harper/acp-relay/internal/tui/theme"
 )
 
-// FocusArea represents which component currently has focus
+// FocusArea represents which component currently has focus.
 type FocusArea int
 
 const (
@@ -102,7 +102,7 @@ func (m Model) Init() tea.Cmd {
 	)
 }
 
-// connectToRelay returns a command that connects to the relay server
+// connectToRelay returns a command that connects to the relay server.
 func (m Model) connectToRelay() tea.Cmd {
 	return func() tea.Msg {
 		DebugLog("connectToRelay: Starting connection to %s", m.config.Relay.URL)
@@ -120,7 +120,7 @@ func (m Model) connectToRelay() tea.Cmd {
 	}
 }
 
-// waitForRelayMessage returns a command that waits for the next relay message
+// waitForRelayMessage returns a command that waits for the next relay message.
 func (m Model) waitForRelayMessage() tea.Cmd {
 	return func() tea.Msg {
 		DebugLog("waitForRelayMessage: Waiting for message...")

@@ -1,6 +1,7 @@
 // ABOUTME: Integration tests for runtime detection
 // ABOUTME: Validates Docker/Colima/Podman detection in real environment
 
+//nolint:goconst // test file uses repeated status strings for readability
 package integration
 
 import (

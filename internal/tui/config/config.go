@@ -120,13 +120,14 @@ func Load(configPath string) (*Config, error) {
 	// If file doesn't exist, create it with defaults
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		if err := saveDefault(cfg, configPath); err != nil {
-			// Log warning but continue with defaults
-			return cfg, nil
+			// Return error if we can't save defaults
+			return nil, fmt.Errorf("save default config: %w", err)
 		}
 		return cfg, nil
 	}
 
 	// Load existing config
+	//nolint:gosec // config file path from validated XDG directory
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
@@ -140,6 +141,7 @@ func Load(configPath string) (*Config, error) {
 	return cfg, nil
 }
 
+//nolint:funlen // comprehensive validation function
 func (c *Config) Validate() {
 	// Clamp sidebar width
 	if c.UI.SidebarWidth < 20 {
@@ -219,7 +221,7 @@ func (c *Config) Validate() {
 	c.Logging.File = expandPath(c.Logging.File)
 }
 
-// expandPath expands ~ in paths
+// expandPath expands ~ in paths.
 func expandPath(path string) string {
 	if strings.HasPrefix(path, "~/") {
 		home := os.Getenv("HOME")
@@ -233,7 +235,7 @@ func expandPath(path string) string {
 
 func saveDefault(cfg *Config, path string) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return err
 	}
 
@@ -242,5 +244,5 @@ func saveDefault(cfg *Config, path string) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0600)
 }

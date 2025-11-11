@@ -6,11 +6,12 @@ package errors
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/harper/acp-relay/internal/jsonrpc"
 )
 
-// JSONRPCError is a structured error type for JSON-RPC responses
+// JSONRPCError is a structured error type for JSON-RPC responses.
 type JSONRPCError struct {
 	Code    int
 	Message string
@@ -59,7 +60,11 @@ func NewAgentConnectionError(agentURL string, attempts int, durationMs int, deta
 		Details:     details,
 	}
 
-	dataBytes, _ := json.Marshal(data)
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		log.Printf("failed to marshal error data: %v", err)
+		dataBytes = []byte("{}")
+	}
 
 	return &jsonrpc.Error{
 		Code:    jsonrpc.ServerError,
@@ -95,7 +100,11 @@ func NewSessionNotFoundError(sessionID string) *jsonrpc.Error {
 		Recoverable: true,
 	}
 
-	dataBytes, _ := json.Marshal(data)
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		log.Printf("failed to marshal error data: %v", err)
+		dataBytes = []byte("{}")
+	}
 
 	return &jsonrpc.Error{
 		Code:    jsonrpc.ServerError,
@@ -134,7 +143,11 @@ func NewInvalidParamsError(paramName string, expectedType string, receivedValue 
 		Recoverable: true,
 	}
 
-	dataBytes, _ := json.Marshal(data)
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		log.Printf("failed to marshal error data: %v", err)
+		dataBytes = []byte("{}")
+	}
 
 	return &jsonrpc.Error{
 		Code:    jsonrpc.InvalidParams,
@@ -170,7 +183,11 @@ func NewParseError(details string) *jsonrpc.Error {
 		Details:     details,
 	}
 
-	dataBytes, _ := json.Marshal(data)
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		log.Printf("failed to marshal error data: %v", err)
+		dataBytes = []byte("{}")
+	}
 
 	return &jsonrpc.Error{
 		Code:    jsonrpc.ParseError,
@@ -207,7 +224,11 @@ func NewInvalidRequestError(details string) *jsonrpc.Error {
 		Details:     details,
 	}
 
-	dataBytes, _ := json.Marshal(data)
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		log.Printf("failed to marshal error data: %v", err)
+		dataBytes = []byte("{}")
+	}
 
 	return &jsonrpc.Error{
 		Code:    jsonrpc.InvalidRequest,
@@ -244,7 +265,11 @@ func NewMethodNotFoundError(methodName string) *jsonrpc.Error {
 		Recoverable: true,
 	}
 
-	dataBytes, _ := json.Marshal(data)
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		log.Printf("failed to marshal error data: %v", err)
+		dataBytes = []byte("{}")
+	}
 
 	return &jsonrpc.Error{
 		Code:    jsonrpc.MethodNotFound,
@@ -280,7 +305,11 @@ func NewInternalError(details string) *jsonrpc.Error {
 		Details:     details,
 	}
 
-	dataBytes, _ := json.Marshal(data)
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		log.Printf("failed to marshal error data: %v", err)
+		dataBytes = []byte("{}")
+	}
 
 	return &jsonrpc.Error{
 		Code:    jsonrpc.InternalError,

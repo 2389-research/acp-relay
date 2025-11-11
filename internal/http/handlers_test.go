@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/harper/acp-relay/internal/session"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSessionNew(t *testing.T) {
@@ -36,7 +37,8 @@ func TestSessionNew(t *testing.T) {
 		"id": 1,
 	}
 
-	body, _ := json.Marshal(reqBody)
+	body, err := json.Marshal(reqBody)
+	require.NoError(t, err)
 	req := httptest.NewRequest("POST", "/session/new", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 

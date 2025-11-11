@@ -44,6 +44,8 @@ type Session struct {
 }
 
 // StartStdioBridge starts goroutines to bridge channels and stdio
+//
+//nolint:gocognit,funlen // complex stdio bridge with multiplexing requiring concurrent I/O handling
 func (s *Session) StartStdioBridge() {
 	// Goroutine: ToAgent channel -> AgentStdin
 	go func() {
@@ -132,29 +134,29 @@ func (s *Session) StartStdioBridge() {
 // These methods allow the WebSocket handler to interact with the ConnectionManager
 // without directly accessing the unexported connMgr field
 
-// AttachClient attaches a WebSocket connection to this session and returns a client ID
+// AttachClient attaches a WebSocket connection to this session and returns a client ID.
 func (s *Session) AttachClient(conn *websocket.Conn) string {
 	return s.connMgr.AttachClient(conn)
 }
 
-// DetachClient removes a client from this session
+// DetachClient removes a client from this session.
 func (s *Session) DetachClient(clientID string) {
 	s.connMgr.DetachClient(clientID)
 }
 
-// StartBroadcaster starts the broadcaster goroutine if not already running
+// StartBroadcaster starts the broadcaster goroutine if not already running.
 func (s *Session) StartBroadcaster() {
 	s.connMgr.StartBroadcaster()
 }
 
 // SafeWriteMessage writes a message to a client's WebSocket using the connection's write mutex
-// This ensures thread-safe writes when both the handler and delivery goroutine write to the same connection
+// This ensures thread-safe writes when both the handler and delivery goroutine write to the same connection.
 func (s *Session) SafeWriteMessage(clientID string, messageType int, data []byte) error {
 	return s.connMgr.SafeWriteMessage(clientID, messageType, data)
 }
 
 // BroadcastError sends an error notification to all connected clients
-// This is typically called when the agent process crashes or exits unexpectedly
+// This is typically called when the agent process crashes or exits unexpectedly.
 func (s *Session) BroadcastError(errorMessage string) {
 	s.connMgr.BroadcastError(errorMessage)
 }

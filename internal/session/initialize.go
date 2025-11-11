@@ -10,7 +10,7 @@ import (
 )
 
 // SendInitialize sends the required ACP initialize message to the agent
-// This must be called before any other messages per the ACP protocol spec
+// This must be called before any other messages per the ACP protocol spec.
 func (s *Session) SendInitialize() error {
 	// Build initialize request per ACP spec
 	initReq := map[string]interface{}{

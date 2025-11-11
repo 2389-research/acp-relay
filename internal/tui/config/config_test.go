@@ -67,7 +67,7 @@ ui:
   sidebar_default_visible: false
   chat_history_limit: 500
 `
-	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0600))
 
 	// Load the config
 	cfg, err := Load(configPath)
@@ -94,7 +94,7 @@ func TestLoadConfig_InvalidYAML(t *testing.T) {
 ui:
     theme: [unclosed array
 `
-	require.NoError(t, os.WriteFile(configPath, []byte(invalidYAML), 0644))
+	require.NoError(t, os.WriteFile(configPath, []byte(invalidYAML), 0600))
 
 	// Load should return error
 	_, err := Load(configPath)

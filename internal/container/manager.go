@@ -22,13 +22,13 @@ import (
 	"github.com/harper/acp-relay/internal/db"
 )
 
-// ContainerInfo tracks a running container for a session
+// ContainerInfo tracks a running container for a session.
 type ContainerInfo struct {
 	ContainerID string
 	SessionID   string
 }
 
-// SessionComponents contains the IO streams and metadata needed to create a session
+// SessionComponents contains the IO streams and metadata needed to create a session.
 type SessionComponents struct {
 	ContainerID string
 	Stdin       io.WriteCloser
@@ -67,7 +67,7 @@ func NewManager(cfg config.ContainerConfig, agentCommand string, agentArgs []str
 	}
 
 	// Verify image exists
-	_, _, err = dockerClient.ImageInspectWithRaw(ctx, cfg.Image)
+	_, err = dockerClient.ImageInspect(ctx, cfg.Image)
 	if err != nil {
 		return nil, NewImageNotFoundError(cfg.Image, err)
 	}
@@ -83,7 +83,7 @@ func NewManager(cfg config.ContainerConfig, agentCommand string, agentArgs []str
 	}, nil
 }
 
-// envContains checks if envVars slice already contains a key
+// envContains checks if envVars slice already contains a key.
 func envContains(envVars []string, key string) bool {
 	prefix := key + "="
 	for _, env := range envVars {
@@ -94,7 +94,7 @@ func envContains(envVars []string, key string) bool {
 	return false
 }
 
-// filterAllowedEnvVars returns only safe host environment variables
+// filterAllowedEnvVars returns only safe host environment variables.
 func (m *Manager) filterAllowedEnvVars(env map[string]string) map[string]string {
 	// Allowlist: only safe terminal and locale vars
 	allowlist := []string{"TERM", "COLORTERM"}
@@ -123,7 +123,7 @@ func (m *Manager) filterAllowedEnvVars(env map[string]string) map[string]string 
 	return result
 }
 
-// buildContainerLabels creates Docker labels for container tracking
+// buildContainerLabels creates Docker labels for container tracking.
 func (m *Manager) buildContainerLabels(sessionID string) map[string]string {
 	return map[string]string{
 		"managed-by": "acp-relay",
@@ -132,7 +132,7 @@ func (m *Manager) buildContainerLabels(sessionID string) map[string]string {
 	}
 }
 
-// sanitizeContainerName produces valid Docker container name
+// sanitizeContainerName produces valid Docker container name.
 func (m *Manager) sanitizeContainerName(sessionID string) string {
 	// Docker names: [a-zA-Z0-9][a-zA-Z0-9_.-]*
 	name := strings.ToLower(sessionID)
@@ -140,7 +140,7 @@ func (m *Manager) sanitizeContainerName(sessionID string) string {
 	return "acp-relay-" + name
 }
 
-// findExistingContainer checks for existing container by labels
+// findExistingContainer checks for existing container by labels.
 func (m *Manager) findExistingContainer(ctx context.Context, sessionID string) (string, error) {
 	// Query containers with our labels
 	filters := filters.NewArgs()
@@ -163,6 +163,7 @@ func (m *Manager) findExistingContainer(ctx context.Context, sessionID string) (
 	return containers[0].ID, nil
 }
 
+//nolint:gocognit,funlen // complex container setup logic with multiple Docker API calls and state management
 func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir string) (*SessionComponents, error) {
 	// ENHANCEMENT: Check for existing container first
 	existingID, err := m.findExistingContainer(ctx, sessionID)
@@ -170,6 +171,7 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 		log.Printf("[%s] Error checking for existing container: %v", sessionID, err)
 	}
 
+	//nolint:nestif // container reuse logic requires nested checks for proper state validation
 	if existingID != "" {
 		// Container exists, check if running
 		inspect, err := m.dockerClient.ContainerInspect(ctx, existingID)
@@ -222,7 +224,7 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 
 	// 1. Create host workspace directory
 	hostWorkspace := filepath.Join(m.config.WorkspaceHostBase, sessionID)
-	if err := os.MkdirAll(hostWorkspace, 0755); err != nil {
+	if err := os.MkdirAll(hostWorkspace, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create workspace directory: %w", err)
 	}
 
@@ -360,7 +362,7 @@ func (m *Manager) CreateSession(ctx context.Context, sessionID, workingDir strin
 		Stderr: true,
 	})
 	if err != nil {
-		m.dockerClient.ContainerStop(ctx, resp.ID, container.StopOptions{})
+		_ = m.dockerClient.ContainerStop(ctx, resp.ID, container.StopOptions{})
 		return nil, NewAttachFailedError(err)
 	}
 
@@ -427,7 +429,7 @@ func (m *Manager) monitorContainer(ctx context.Context, containerID, sessionID s
 				Tail:       "50",
 			})
 			if err == nil {
-				defer logs.Close()
+				defer func() { _ = logs.Close() }()
 				// Demux the logs since they're also multiplexed
 				var stdout, stderr []byte
 				stdoutBuf := &bytesBuffer{buf: &stdout}
@@ -440,7 +442,7 @@ func (m *Manager) monitorContainer(ctx context.Context, containerID, sessionID s
 	}
 }
 
-// Helper for capturing logs
+// bytesBuffer is a helper for capturing logs.
 type bytesBuffer struct {
 	buf *[]byte
 }

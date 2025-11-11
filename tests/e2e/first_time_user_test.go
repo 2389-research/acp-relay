@@ -13,8 +13,11 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
+//nolint:funlen // end-to-end test covering full user flow
 func TestFirstTimeUser_FullFlow(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
@@ -28,7 +31,7 @@ func TestFirstTimeUser_FullFlow(t *testing.T) {
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
-	defer os.Remove("acp-relay")
+	defer func() { _ = os.Remove("acp-relay") }()
 
 	// Step 2: Setup (automated with default answers)
 	tmpDir := t.TempDir()
@@ -59,7 +62,7 @@ database:
   path: "` + tmpDir + `/db.sqlite"
 `
 
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
 		t.Fatalf("Failed to write config: %v", err)
 	}
 
@@ -71,11 +74,12 @@ database:
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
+	//nolint:gosec // test subprocess with controlled arguments
 	cmd = exec.CommandContext(ctx, "./acp-relay", "--config", configPath)
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("Failed to start server: %v", err)
 	}
-	defer cmd.Process.Kill()
+	defer func() { _ = cmd.Process.Kill() }()
 
 	// Wait for server to be ready
 	time.Sleep(2 * time.Second)
@@ -91,12 +95,13 @@ database:
 		"id": 1,
 	}
 
-	reqJSON, _ := json.Marshal(reqBody)
+	reqJSON, err := json.Marshal(reqBody)
+	require.NoError(t, err)
 	resp, err := http.Post("http://127.0.0.1:18080/session/new", "application/json", bytes.NewReader(reqJSON))
 	if err != nil {
 		t.Fatalf("Session creation failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var respBody map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&respBody); err != nil {

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// ConfigHome returns ~/.config/acp-relay or respects XDG_CONFIG_HOME
+// ConfigHome returns ~/.config/acp-relay or respects XDG_CONFIG_HOME.
 func ConfigHome() string {
 	if xdgConfig := os.Getenv("XDG_CONFIG_HOME"); xdgConfig != "" {
 		return filepath.Join(xdgConfig, "acp-relay")
@@ -18,19 +18,19 @@ func ConfigHome() string {
 	return filepath.Join(home, ".config", "acp-relay")
 }
 
-// DataHome returns ~/.local/share/acp-relay
+// DataHome returns ~/.local/share/acp-relay.
 func DataHome() string {
 	home := getHome()
 	return filepath.Join(home, ".local", "share", "acp-relay")
 }
 
-// CacheHome returns ~/.cache/acp-relay
+// CacheHome returns ~/.cache/acp-relay.
 func CacheHome() string {
 	home := getHome()
 	return filepath.Join(home, ".cache", "acp-relay")
 }
 
-// ExpandPath expands $XDG_* variables and ~ in config paths
+// ExpandPath expands $XDG_* variables and ~ in config paths.
 func ExpandPath(path string) string {
 	// Expand tilde
 	if strings.HasPrefix(path, "~/") {
@@ -52,7 +52,7 @@ func ExpandPath(path string) string {
 	return path
 }
 
-// getHome returns HOME with fallback chain (Error #2 fix)
+// getHome returns HOME with fallback chain (Error #2 fix).
 func getHome() string {
 	if home := os.Getenv("HOME"); home != "" {
 		return home

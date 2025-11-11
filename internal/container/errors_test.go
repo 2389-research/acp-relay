@@ -56,6 +56,7 @@ func TestNewDockerUnavailableError(t *testing.T) {
 		t.Errorf("Message should suggest 'docker ps', got: %q", err.Message)
 	}
 
+	//nolint:errorlint // testing struct field equality, not error comparison
 	if err.Cause != cause {
 		t.Errorf("Cause = %v, want %v", err.Cause, cause)
 	}
@@ -87,6 +88,7 @@ func TestNewImageNotFoundError(t *testing.T) {
 		t.Errorf("Message should suggest 'docker build', got: %q", err.Message)
 	}
 
+	//nolint:errorlint // testing struct field equality, not error comparison
 	if err.Cause != cause {
 		t.Errorf("Cause = %v, want %v", err.Cause, cause)
 	}
@@ -113,6 +115,7 @@ func TestNewAttachFailedError(t *testing.T) {
 		t.Errorf("Message should mention attach failure, got: %q", err.Message)
 	}
 
+	//nolint:errorlint // testing struct field equality, not error comparison
 	if err.Cause != cause {
 		t.Errorf("Cause = %v, want %v", err.Cause, cause)
 	}

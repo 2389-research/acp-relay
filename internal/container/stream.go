@@ -11,18 +11,19 @@ import (
 )
 
 // demuxStreams separates Docker's multiplexed stdout/stderr stream
-// Returns two readers: one for stdout, one for stderr (both are ReadCloser from io.Pipe)
+// Returns two readers: one for stdout, one for stderr (both are ReadCloser from io.Pipe).
 func demuxStreams(multiplexed io.Reader) (stdout, stderr io.ReadCloser) {
 	stdoutPipe, stdoutWriter := io.Pipe()
 	stderrPipe, stderrWriter := io.Pipe()
 
 	// Background goroutine to demux
 	go func() {
-		defer stdoutWriter.Close()
-		defer stderrWriter.Close()
+		defer func() { _ = stdoutWriter.Close() }()
+		defer func() { _ = stderrWriter.Close() }()
 
 		// stdcopy.StdCopy handles Docker's 8-byte header protocol
 		_, err := stdcopy.StdCopy(stdoutWriter, stderrWriter, multiplexed)
+		//nolint:errorlint // EOF is a sentinel value, not wrapped
 		if err != nil && err != io.EOF {
 			// Log error but don't crash - container might be stopping
 			log.Printf("stream demux error: %v", err)

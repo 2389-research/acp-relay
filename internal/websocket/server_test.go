@@ -31,11 +31,11 @@ func TestWebSocketConnection(t *testing.T) {
 
 	// Connect via WebSocket
 	wsURL := "ws" + strings.TrimPrefix(httpSrv.URL, "http")
-	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil) //nolint:bodyclose // websocket connection, not HTTP response
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
-	defer ws.Close()
+	defer func() { _ = ws.Close() }()
 
 	// Send session/new
 	tmpDir := t.TempDir()
@@ -68,6 +68,7 @@ func TestWebSocketConnection(t *testing.T) {
 	}
 }
 
+//nolint:funlen // integration test with multiple clients
 func TestMultiClientResume(t *testing.T) {
 	// Get absolute path to mock agent
 	_, filename, _, _ := runtime.Caller(0)
@@ -90,11 +91,11 @@ func TestMultiClientResume(t *testing.T) {
 
 	// === Client 1: Create session ===
 	t.Log("Client 1: Creating session...")
-	ws1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	ws1, _, err := websocket.DefaultDialer.Dial(wsURL, nil) //nolint:bodyclose // websocket connection, not HTTP response
 	if err != nil {
 		t.Fatalf("Client 1: failed to connect: %v", err)
 	}
-	defer ws1.Close()
+	defer func() { _ = ws1.Close() }()
 
 	tmpDir := t.TempDir()
 	req1 := map[string]interface{}{
@@ -138,11 +139,11 @@ func TestMultiClientResume(t *testing.T) {
 
 	// === Client 2: Resume session ===
 	t.Log("Client 2: Resuming session...")
-	ws2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	ws2, _, err := websocket.DefaultDialer.Dial(wsURL, nil) //nolint:bodyclose // websocket connection, not HTTP response
 	if err != nil {
 		t.Fatalf("Client 2: failed to connect: %v", err)
 	}
-	defer ws2.Close()
+	defer func() { _ = ws2.Close() }()
 
 	req2 := map[string]interface{}{
 		"jsonrpc": "2.0",
@@ -215,7 +216,7 @@ func TestMultiClientResume(t *testing.T) {
 
 	// Close client 1
 	t.Log("Closing Client 1...")
-	ws1.Close()
+	_ = ws1.Close()
 
 	// Client 2 should still work
 	testReq2 := map[string]interface{}{

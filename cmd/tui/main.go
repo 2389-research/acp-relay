@@ -43,15 +43,23 @@ func main() {
 	}
 
 	// Setup debug logging if enabled
+	//nolint:nestif // debug mode setup requires nested conditionals for proper initialization
 	if *debug {
 		logFile := os.ExpandEnv("$HOME/.local/share/acp-tui/debug.log")
-		os.MkdirAll(os.ExpandEnv("$HOME/.local/share/acp-tui"), 0755)
-		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err := os.MkdirAll(os.ExpandEnv("$HOME/.local/share/acp-tui"), 0750); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create debug log directory: %v\n", err)
+		}
+		//nolint:gosec // log file path from environment variable for debugging
+		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to open debug log: %v\n", err)
 		} else {
 			tui.EnableDebug(f)
-			defer f.Close()
+			defer func() {
+				if err := f.Close(); err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to close debug log: %v\n", err)
+				}
+			}()
 			tui.DebugLog("TUI starting with relay URL: %s", cfg.Relay.URL)
 		}
 	}
@@ -65,6 +73,7 @@ func main() {
 	// Run program
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		// nolint:gocritic // Exit is intentional - critical startup failure
 		os.Exit(1)
 	}
 }
