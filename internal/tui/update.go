@@ -229,7 +229,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Connection established, update status and start listening
 		DebugLog("Update: RelayConnectedMsg - connection established")
 		m.statusBar.SetConnectionStatus("connected")
-		return m, m.waitForRelayMessage()
+
+		// Show success notification
+		notifCmd := m.notifications.Show("Connected to relay server", "success")
+
+		return m, tea.Batch(m.waitForRelayMessage(), notifCmd)
 
 	case RelayMessageMsg:
 		// Handle incoming WebSocket messages
@@ -446,6 +450,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							DebugLog("Update: Sending permission approval: %s", string(responseJSON))
 							DebugLog("Update: Failed to send permission response: %v", err)
 						} else if m.activeSessionID != "" {
+							// Show info notification
+							_ = m.notifications.Show("Permission approved", "info")
+
 							// Add permission response message to display
 							respMsg := &client.Message{
 								SessionID:  m.activeSessionID,
@@ -502,6 +509,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.activeSessionID = sess.ID
 						m.statusBar.SetActiveSession(sess.DisplayName)
 
+						// Show info notification
+						_ = m.notifications.Show("Session created", "info")
+
 						// Add welcome message
 						welcomeMsg := &client.Message{
 							SessionID: sessionID,
@@ -547,6 +557,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		DebugLog("Update: RelayErrorMsg - %v", msg.Err)
 		m.statusBar.SetConnectionStatus("disconnected")
 
+		// Show error notification
+		notifCmd := m.notifications.Show(fmt.Sprintf("Connection error: %s", msg.Err.Error()), "error")
+
 		// Add error message to message store
 		if m.activeSessionID != "" {
 			errMsg := &client.Message{
@@ -558,7 +571,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.messageStore.AddMessage(errMsg)
 			m = m.updateChatView()
 		}
-		return m, nil
+		return m, notifCmd
 
 	case RelayDisconnectedMsg:
 		// Handle disconnection
@@ -572,6 +585,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			// Resume failed - show error and create new session as fallback
 			DebugLog("Update: SessionResumeResultMsg - resume failed: %v", msg.Err)
+
+			// Show warning notification
+			_ = m.notifications.Show("Failed to resume session", "warning")
 
 			// Add error message to display
 			if m.activeSessionID != "" {
@@ -590,6 +606,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			// Resume successful - load history from database
 			DebugLog("Update: SessionResumeResultMsg - resume succeeded for session %s", msg.SessionID)
+
+			// Show success notification
+			_ = m.notifications.Show("Session resumed", "success")
 
 			// Set as active session (NOT read-only)
 			m.activeSessionID = msg.SessionID
@@ -645,6 +664,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		_, cmd = m.inputArea.Update(msg)
 		cmds = append(cmds, cmd)
 	}
+
+	// Always update notifications (handles DismissNotificationMsg)
+	cmd = m.notifications.Update(msg)
+	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
 }

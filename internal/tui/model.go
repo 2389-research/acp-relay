@@ -28,12 +28,13 @@ type Model struct {
 	height int
 
 	// Components
-	sidebar      *components.Sidebar
-	chatView     *components.ChatView
-	inputArea    *components.InputArea
-	statusBar    *components.StatusBar
-	helpOverlay  *components.HelpOverlay
-	sessionModal tea.Model // Session selection modal
+	sidebar       *components.Sidebar
+	chatView      *components.ChatView
+	inputArea     *components.InputArea
+	statusBar     *components.StatusBar
+	helpOverlay   *components.HelpOverlay
+	sessionModal  tea.Model // Session selection modal
+	notifications *components.NotificationComponent
 
 	// Data managers
 	relayClient    *client.RelayClient
@@ -59,6 +60,7 @@ func NewModel(cfg *config.Config) Model {
 	inputArea := components.NewInputArea(80, 4, th)
 	statusBar := components.NewStatusBar(80, th)
 	helpOverlay := components.NewHelpOverlay(80, 24, th)
+	notifications := components.NewNotificationComponent(80, th)
 
 	// Initialize data managers
 	relayClient := client.NewRelayClient(cfg.Relay.URL)
@@ -81,6 +83,7 @@ func NewModel(cfg *config.Config) Model {
 		inputArea:       inputArea,
 		statusBar:       statusBar,
 		helpOverlay:     helpOverlay,
+		notifications:   notifications,
 		relayClient:     relayClient,
 		sessionManager:  sessionManager,
 		messageStore:    messageStore,

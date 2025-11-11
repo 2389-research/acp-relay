@@ -56,5 +56,20 @@ func (m Model) View() string {
 		return m.helpOverlay.View()
 	}
 
+	// Render notifications in top-right corner if any exist
+	notificationView := m.notifications.View()
+	if notificationView != "" {
+		// Use Lipgloss Place to position notifications in top-right
+		fullView = lipgloss.Place(
+			m.width,
+			m.height,
+			lipgloss.Right,
+			lipgloss.Top,
+			notificationView,
+			lipgloss.WithWhitespaceChars(" "),
+			lipgloss.WithWhitespaceForeground(lipgloss.NoColor{}),
+		) + "\n" + fullView
+	}
+
 	return fullView
 }
