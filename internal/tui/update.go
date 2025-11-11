@@ -46,6 +46,10 @@ type createNewSessionMsg struct{}
 
 type createNewSessionAfterConnectMsg struct{}
 
+type resumeSessionAfterConnectMsg struct {
+	Session client.ManagementSession
+}
+
 // Global message ID counter for JSON-RPC requests.
 var messageIDCounter uint64
 
@@ -85,54 +89,55 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Close modal
 		m.sessionModal = nil
 
-		// Connect to relay first
+		// If session is closed, load history in read-only mode (no connection needed)
+		if !msg.Session.IsActive {
+			DebugLog("Update: Session is closed, loading history in read-only mode")
+			m.activeSessionID = msg.Session.ID
+			m.readOnlyMode = true
+
+			// Disable input area
+			m.inputArea.SetDisabled(true)
+
+			// Set status bar to read-only mode
+			m.statusBar.SetReadOnlyMode(true)
+
+			// Note: Message history for closed sessions is not available in read-only mode
+			// TODO: Add API endpoint to fetch message history for closed sessions
+
+			// Update subtitle with read-only indicator
+			sessionIDShort := msg.Session.ID
+			if len(sessionIDShort) > 12 {
+				sessionIDShort = sessionIDShort[:12]
+			}
+			m.statusBar.SetActiveSession(sessionIDShort + " (Read-Only)")
+
+			// Update chat view
+			m = m.updateChatView()
+
+			return m, nil
+		}
+
+		// Session is active - need to connect to relay first
 		if !m.relayClient.IsConnected() {
-			DebugLog("Update: Connecting to relay before handling session selection")
-			if err := m.relayClient.Connect(); err != nil {
-				DebugLog("Update: Connection failed: %v", err)
-				return m, func() tea.Msg { return RelayErrorMsg{Err: err} }
+			DebugLog("Update: Connecting to relay before resuming session")
+			return m, tea.Batch(
+				m.connectToRelay(),
+				// After connection, resume session
+				func() tea.Msg {
+					return resumeSessionAfterConnectMsg(msg)
+				},
+			)
+		}
+
+		// Already connected, resume session immediately
+		DebugLog("Update: Session is active, attempting resume")
+		return m, func() tea.Msg {
+			err := m.relayClient.ResumeSession(msg.Session.ID)
+			return SessionResumeResultMsg{
+				SessionID: msg.Session.ID,
+				Err:       err,
 			}
-			m.statusBar.SetConnectionStatus("connected")
 		}
-
-		// If session is active, attempt to resume
-		if msg.Session.IsActive {
-			DebugLog("Update: Session is active, attempting resume")
-			return m, func() tea.Msg {
-				err := m.relayClient.ResumeSession(msg.Session.ID)
-				return SessionResumeResultMsg{
-					SessionID: msg.Session.ID,
-					Err:       err,
-				}
-			}
-		}
-
-		// If session is closed, load history in read-only mode
-		DebugLog("Update: Session is closed, loading history in read-only mode")
-		m.activeSessionID = msg.Session.ID
-		m.readOnlyMode = true
-
-		// Disable input area
-		m.inputArea.SetDisabled(true)
-
-		// Set status bar to read-only mode
-		m.statusBar.SetReadOnlyMode(true)
-
-		// Note: Message history for closed sessions is not available in read-only mode
-		// TODO: Add API endpoint to fetch message history for closed sessions
-
-		// Update subtitle with read-only indicator
-		sessionIDShort := msg.Session.ID
-		if len(sessionIDShort) > 12 {
-			sessionIDShort = sessionIDShort[:12]
-		}
-		m.statusBar.SetActiveSession(sessionIDShort + " (Read-Only)")
-
-		// Update chat view
-		m = m.updateChatView()
-
-		// Start listening for relay messages
-		return m, m.waitForRelayMessage()
 
 	case createNewSessionMsg:
 		// User wants to create a new session
@@ -146,9 +151,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			DebugLog("Update: Connecting to relay before creating session")
 			return m, tea.Batch(
 				m.connectToRelay(),
-				// After connection, create session
+				// Send message to create session after connection completes
 				func() tea.Msg {
-					time.Sleep(100 * time.Millisecond) // Brief delay for connection
 					return createNewSessionAfterConnectMsg{}
 				},
 			)
@@ -159,10 +163,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.waitForRelayMessage()
 
 	case createNewSessionAfterConnectMsg:
+		// Wait for connection to be established before creating session
+		if !m.relayClient.IsConnected() {
+			DebugLog("Update: createNewSessionAfterConnectMsg - waiting for connection")
+			// Connection not ready yet, check again shortly
+			return m, func() tea.Msg {
+				time.Sleep(50 * time.Millisecond)
+				return createNewSessionAfterConnectMsg{}
+			}
+		}
 		// Connection established, now create session
 		DebugLog("Update: createNewSessionAfterConnectMsg - creating session after connection")
 		m = m.onCreateSession()
 		return m, m.waitForRelayMessage()
+
+	case resumeSessionAfterConnectMsg:
+		// Wait for connection to be established before resuming session
+		if !m.relayClient.IsConnected() {
+			DebugLog("Update: resumeSessionAfterConnectMsg - waiting for connection")
+			// Connection not ready yet, check again shortly
+			return m, func() tea.Msg {
+				time.Sleep(50 * time.Millisecond)
+				return resumeSessionAfterConnectMsg{Session: msg.Session}
+			}
+		}
+		// Connection established, now resume session
+		DebugLog("Update: resumeSessionAfterConnectMsg - resuming session after connection: %s", msg.Session.ID)
+		return m, func() tea.Msg {
+			err := m.relayClient.ResumeSession(msg.Session.ID)
+			return SessionResumeResultMsg{
+				SessionID: msg.Session.ID,
+				Err:       err,
+			}
+		}
 
 	case tea.KeyMsg:
 		// If modal is visible, route all keys to it
