@@ -26,6 +26,11 @@ type RelayConnectedMsg struct{}
 
 type RelayDisconnectedMsg struct{}
 
+type SessionResumeResultMsg struct {
+	SessionID string
+	Err       error
+}
+
 // Global message ID counter for JSON-RPC requests.
 var messageIDCounter uint64
 
@@ -242,6 +247,71 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		DebugLog("Update: RelayDisconnectedMsg - connection closed")
 		m.statusBar.SetConnectionStatus("disconnected")
 		return m, nil
+
+	case SessionResumeResultMsg:
+		// Handle session resume result
+		//nolint:nestif // session resume requires nested error handling and database operations
+		if msg.Err != nil {
+			// Resume failed - show error and create new session as fallback
+			DebugLog("Update: SessionResumeResultMsg - resume failed: %v", msg.Err)
+
+			// Add error message to display
+			if m.activeSessionID != "" {
+				errMsg := &client.Message{
+					SessionID: m.activeSessionID,
+					Type:      client.MessageTypeError,
+					Content:   fmt.Sprintf("Failed to resume session: %s. Creating new session...", msg.Err.Error()),
+					Timestamp: time.Now(),
+				}
+				m.messageStore.AddMessage(errMsg)
+				m = m.updateChatView()
+			}
+
+			// Fallback: create new session
+			m = m.onCreateSession()
+		} else {
+			// Resume successful - load history from database
+			DebugLog("Update: SessionResumeResultMsg - resume succeeded for session %s", msg.SessionID)
+
+			// Set as active session
+			m.activeSessionID = msg.SessionID
+
+			// Find the session in sidebar and update display name
+			sessions := m.sessionManager.List()
+			for _, sess := range sessions {
+				if sess.ID == msg.SessionID {
+					m.statusBar.SetActiveSession(sess.DisplayName)
+					break
+				}
+			}
+
+			// Load message history from database if available
+			if m.dbClient != nil {
+				messages, err := m.dbClient.GetSessionMessages(msg.SessionID)
+				if err != nil {
+					DebugLog("Update: SessionResumeResultMsg - failed to load history: %v", err)
+				} else {
+					DebugLog("Update: SessionResumeResultMsg - loaded %d messages from database", len(messages))
+					// Add messages to store
+					for _, historyMsg := range messages {
+						m.messageStore.AddMessage(historyMsg)
+					}
+				}
+			}
+
+			// Add success message
+			successMsg := &client.Message{
+				SessionID: msg.SessionID,
+				Type:      client.MessageTypeSystem,
+				Content:   fmt.Sprintf("Session resumed: %s", msg.SessionID),
+				Timestamp: time.Now(),
+			}
+			m.messageStore.AddMessage(successMsg)
+
+			// Update chat view with loaded history
+			m = m.updateChatView()
+		}
+		return m, nil
 	}
 
 	// Update components that need to receive all messages (like viewport scrolling)
@@ -339,7 +409,8 @@ func (m Model) handleFocusedInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "d":
 			// TODO: Delete session
 		case "r":
-			// TODO: Rename session
+			// Resume selected session
+			return m, m.onResumeSession()
 		}
 
 	case FocusChatView:
@@ -536,4 +607,35 @@ func (m Model) onCreateSession() Model {
 	// TODO: Store pending session creation state
 
 	return m
+}
+
+// onResumeSession attempts to resume the selected session from the sidebar.
+func (m Model) onResumeSession() tea.Cmd {
+	sess := m.sidebar.GetSelectedSession()
+	if sess == nil {
+		DebugLog("onResumeSession: No session selected")
+		return nil
+	}
+
+	sessionID := sess.ID
+	DebugLog("onResumeSession: Attempting to resume session %s", sessionID)
+
+	if !m.relayClient.IsConnected() {
+		DebugLog("onResumeSession: Not connected to relay")
+		return func() tea.Msg {
+			return SessionResumeResultMsg{
+				SessionID: sessionID,
+				Err:       fmt.Errorf("not connected to relay server"),
+			}
+		}
+	}
+
+	// Return a command that calls ResumeSession in a goroutine
+	return func() tea.Msg {
+		err := m.relayClient.ResumeSession(sessionID)
+		return SessionResumeResultMsg{
+			SessionID: sessionID,
+			Err:       err,
+		}
+	}
 }

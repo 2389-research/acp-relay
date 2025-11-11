@@ -30,3 +30,4 @@ docs/architecture.svg
 # Test coverage files
 coverage.out
 coverage.html
+tui

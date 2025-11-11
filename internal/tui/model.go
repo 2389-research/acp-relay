@@ -38,6 +38,7 @@ type Model struct {
 	relayClient    *client.RelayClient
 	sessionManager *client.SessionManager
 	messageStore   *client.MessageStore
+	dbClient       *client.DatabaseClient
 
 	// UI state
 	focusedArea     FocusArea
@@ -60,6 +61,14 @@ func NewModel(cfg *config.Config) Model {
 	sessionManager := client.NewSessionManager()
 	messageStore := client.NewMessageStore(1000) // 1000 message history limit
 
+	// Initialize database client (for reading relay server database)
+	dbClient, err := client.NewDatabaseClient("")
+	if err != nil {
+		DebugLog("NewModel: Failed to initialize database client: %v", err)
+		// Continue without database support
+		dbClient = nil
+	}
+
 	m := Model{
 		config:          cfg,
 		theme:           th,
@@ -71,6 +80,7 @@ func NewModel(cfg *config.Config) Model {
 		relayClient:     relayClient,
 		sessionManager:  sessionManager,
 		messageStore:    messageStore,
+		dbClient:        dbClient,
 		focusedArea:     FocusInputArea,
 		activeSessionID: "",
 		sidebarVisible:  true,
