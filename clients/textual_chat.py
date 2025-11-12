@@ -18,7 +18,6 @@ Usage:
 import asyncio
 import websockets
 import json
-import sqlite3
 from datetime import datetime
 from pathlib import Path
 from textual.app import App, ComposeResult
@@ -31,7 +30,6 @@ from textual.screen import ModalScreen
 # Configuration
 RELAY_WS_URL = "ws://localhost:23891"
 WORKING_DIR = "/tmp"
-DB_PATH = str(Path.home() / ".local" / "share" / "acp-relay" / "db.sqlite")
 
 
 class ChatMessage(Static):
@@ -538,6 +536,68 @@ class ACPChatApp(App):
             "id": msg_id
         }
         await self.websocket.send(json.dumps(message))
+
+    async def request_session_list(self) -> list:
+        """Request list of all sessions from relay server"""
+        if not self.websocket:
+            return []
+
+        # Send session/list request
+        msg_id = self.msg_id
+        self.msg_id += 1
+
+        await self.send_message("session/list", {}, msg_id)
+
+        # Wait for response
+        try:
+            raw_msg = await asyncio.wait_for(self.websocket.recv(), timeout=5.0)
+            msg = json.loads(raw_msg)
+
+            if msg.get("id") == msg_id and "result" in msg:
+                sessions = msg["result"].get("sessions", [])
+                return sessions
+            elif "error" in msg:
+                self.notify(f"Error getting sessions: {msg['error'].get('message', 'unknown')}", severity="error")
+                return []
+        except asyncio.TimeoutError:
+            self.notify("Timeout getting session list", severity="warning")
+            return []
+        except Exception as e:
+            self.notify(f"Error getting sessions: {e}", severity="error")
+            return []
+
+        return []
+
+    async def request_session_history(self, session_id: str) -> list:
+        """Request message history for a session from relay server"""
+        if not self.websocket:
+            return []
+
+        # Send session/history request
+        msg_id = self.msg_id
+        self.msg_id += 1
+
+        await self.send_message("session/history", {"sessionId": session_id}, msg_id)
+
+        # Wait for response
+        try:
+            raw_msg = await asyncio.wait_for(self.websocket.recv(), timeout=10.0)
+            msg = json.loads(raw_msg)
+
+            if msg.get("id") == msg_id and "result" in msg:
+                messages = msg["result"].get("messages", [])
+                return messages
+            elif "error" in msg:
+                self.notify(f"Error getting history: {msg['error'].get('message', 'unknown')}", severity="error")
+                return []
+        except asyncio.TimeoutError:
+            self.notify("Timeout getting session history", severity="warning")
+            return []
+        except Exception as e:
+            self.notify(f"Error getting history: {e}", severity="error")
+            return []
+
+        return []
 
     def update_status(self, text: str):
         """Update the status bar"""
