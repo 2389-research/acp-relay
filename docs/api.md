@@ -274,6 +274,115 @@ Create a session over the WebSocket connection.
 }
 ```
 
+#### session/list
+
+List all sessions (active and closed).
+
+**Client → Server:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "session/list",
+  "params": {},
+  "id": 3
+}
+```
+
+**Server → Client:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "sessions": [
+      {
+        "id": "sess_abc12345",
+        "agentSessionId": "agent_xyz",
+        "workingDirectory": "/tmp/workspace",
+        "createdAt": "2025-11-12T10:30:00Z",
+        "closedAt": null,
+        "isActive": true
+      },
+      {
+        "id": "sess_def67890",
+        "agentSessionId": "agent_uvw",
+        "workingDirectory": "/tmp/other",
+        "createdAt": "2025-11-11T15:20:00Z",
+        "closedAt": "2025-11-11T16:45:00Z",
+        "isActive": false
+      }
+    ]
+  },
+  "id": 3
+}
+```
+
+**Use Cases:**
+- Display list of available sessions for resumption
+- Show session history in UI
+- Monitor active vs closed sessions
+
+#### session/history
+
+Get message history for a specific session.
+
+**Client → Server:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "session/history",
+  "params": {
+    "sessionId": "sess_abc12345"
+  },
+  "id": 4
+}
+```
+
+**Server → Client:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "sessionId": "sess_abc12345",
+    "messages": [
+      {
+        "id": 1,
+        "direction": "client_to_relay",
+        "messageType": "request",
+        "method": "session/prompt",
+        "jsonrpcId": 2,
+        "rawMessage": "{\"jsonrpc\":\"2.0\",\"method\":\"session/prompt\",...}",
+        "timestamp": "2025-11-12T10:31:15Z"
+      },
+      {
+        "id": 2,
+        "direction": "relay_to_client",
+        "messageType": "response",
+        "method": "",
+        "jsonrpcId": 2,
+        "rawMessage": "{\"jsonrpc\":\"2.0\",\"result\":{...}}",
+        "timestamp": "2025-11-12T10:31:20Z"
+      }
+    ]
+  },
+  "id": 4
+}
+```
+
+**Message Directions:**
+- `client_to_relay` - Client sent to relay
+- `relay_to_agent` - Relay forwarded to agent
+- `agent_to_relay` - Agent responded to relay
+- `relay_to_client` - Relay forwarded to client
+
+**Use Cases:**
+- View conversation history for closed sessions
+- Replay message flow for debugging
+- Export session transcripts
+
 #### Other Methods
 
 After creating a session, all other JSON-RPC messages are forwarded directly to the agent.
