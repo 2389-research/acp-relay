@@ -306,13 +306,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if method, hasMethod := response["method"].(string); hasMethod {
 			// This is a notification
 			params, _ := response["params"].(map[string]interface{})
-			DebugLog("Update: RelayMessageMsg - notification method=%s", method)
+
+			// Extract sessionId from params (all session notifications include this)
+			messageSessionID, _ := params["sessionId"].(string)
+
+			DebugLog("Update: RelayMessageMsg - notification method=%s, sessionId=%s, active=%s", method, messageSessionID, m.activeSessionID)
 
 			switch method {
 			case "session/chunk":
 				// Agent is streaming a response chunk
 				handled = true
-				if m.activeSessionID != "" {
+				// Only process if message is for our active session
+				if m.activeSessionID != "" && messageSessionID == m.activeSessionID {
 					if content, ok := params["content"].(string); ok {
 						// Accumulate response for typing indicator
 						m.currentResponse += content
@@ -323,6 +328,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						// Advance progress bar
 						m.statusBar.AdvanceProgress(2.0)
 					}
+				} else if m.activeSessionID != "" && messageSessionID != m.activeSessionID {
+					DebugLog("Update: Ignoring session/chunk for inactive session %s (active: %s)", messageSessionID, m.activeSessionID)
 				}
 
 			case "session/complete":
@@ -330,17 +337,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				handled = true
 				DebugLog("Update: session/complete received")
 
-				// Stop typing indicator (adds final message)
-				m.chatView.StopTyping()
-				m.currentResponse = ""
+				// Only process if message is for our active session
+				if m.activeSessionID != "" && messageSessionID == m.activeSessionID {
+					// Stop typing indicator (adds final message)
+					m.chatView.StopTyping()
+					m.currentResponse = ""
 
-				// Hide progress bar
-				m.statusBar.HideProgress()
+					// Hide progress bar
+					m.statusBar.HideProgress()
+				} else if m.activeSessionID != "" && messageSessionID != m.activeSessionID {
+					DebugLog("Update: Ignoring session/complete for inactive session %s (active: %s)", messageSessionID, m.activeSessionID)
+				}
 
 			case "session/update":
 				// Session status update (available_commands, tool_use, thinking, thought_chunk, agent_message_chunk)
 				handled = true
 				DebugLog("Update: session/update received")
+
+				// Only process if message is for our active session
+				if m.activeSessionID == "" || messageSessionID != m.activeSessionID {
+					if messageSessionID != "" {
+						DebugLog("Update: Ignoring session/update for inactive session %s (active: %s)", messageSessionID, m.activeSessionID)
+					}
+					break
+				}
 
 				// Extract the update object
 				if update, ok := params["update"].(map[string]interface{}); ok {
@@ -466,6 +486,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Agent requesting permission to use a tool
 				handled = true
 				DebugLog("Update: session/request_permission received")
+
+				// Only process if message is for our active session
+				if m.activeSessionID == "" || messageSessionID != m.activeSessionID {
+					if messageSessionID != "" {
+						DebugLog("Update: Ignoring session/request_permission for inactive session %s (active: %s)", messageSessionID, m.activeSessionID)
+					}
+					break
+				}
 
 				// Extract request ID for response
 				requestID, hasID := response["id"]
