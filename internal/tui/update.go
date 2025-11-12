@@ -965,6 +965,18 @@ func (m Model) onCreateSession() Model {
 	// Use config default working directory
 	workingDir := m.config.Sessions.DefaultWorkingDir
 
+	// Create workspace directory if auto_create_workspace is enabled
+	if m.config.Sessions.AutoCreateWorkspace {
+		if err := os.MkdirAll(workingDir, 0750); err != nil {
+			DebugLog("onCreateSession: Failed to create workspace directory %s: %v", workingDir, err)
+			notifCmd := m.notifications.Show(fmt.Sprintf("Failed to create workspace: %s", err.Error()), "error")
+			// Execute notification command inline
+			_ = notifCmd()
+			return m
+		}
+		DebugLog("onCreateSession: Ensured workspace directory exists: %s", workingDir)
+	}
+
 	// Call relay server to create session
 	msgID := atomic.AddUint64(&messageIDCounter, 1)
 
