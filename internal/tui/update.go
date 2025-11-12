@@ -442,6 +442,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								m.statusBar.AdvanceProgress(1.0)
 							}
 						}
+
+					case "agent_message_chunk":
+						// Extract message text and accumulate for typing indicator
+						if content, ok := update["content"].(map[string]interface{}); ok {
+							if text, ok := content["text"].(string); ok {
+								if m.activeSessionID != "" {
+									// Accumulate response for typing indicator
+									m.currentResponse += text
+
+									// Update typing indicator with accumulated text
+									m.chatView.UpdateTyping(m.currentResponse)
+
+									// Advance progress bar
+									m.statusBar.AdvanceProgress(2.0)
+								}
+							}
+						}
 					}
 				}
 
