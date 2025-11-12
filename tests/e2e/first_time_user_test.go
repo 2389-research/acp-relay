@@ -29,6 +29,9 @@ func TestFirstTimeUser_FullFlow(t *testing.T) {
 	repoRoot, err := filepath.Abs("../..")
 	require.NoError(t, err, "Failed to find repo root")
 
+	// Find mock agent path
+	mockAgentPath := filepath.Join(repoRoot, "testdata", "mock_agent.py")
+
 	// Step 1: Build binaries
 	t.Log("Building acp-relay...")
 	binaryPath := filepath.Join(repoRoot, "acp-relay")
@@ -46,7 +49,7 @@ func TestFirstTimeUser_FullFlow(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
 
-	// Generate minimal config
+	// Generate minimal config using process mode (not container)
 	configContent := `
 server:
   http_port: 18080
@@ -57,15 +60,9 @@ server:
   management_host: "127.0.0.1"
 
 agent:
-  command: "/bin/sh"
-  mode: "container"
-  args: ["-c", "echo '{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{}}' && sleep 30"]
-  container:
-    image: "alpine:latest"
-    docker_host: "unix:///var/run/docker.sock"
-    workspace_host_base: "` + tmpDir + `/workspaces"
-    workspace_container_path: "/workspace"
-    auto_remove: true
+  command: "python3"
+  mode: "process"
+  args: ["` + mockAgentPath + `"]
 
 database:
   path: "` + tmpDir + `/db.sqlite"
@@ -84,22 +81,42 @@ database:
 	defer cancel()
 
 	//nolint:gosec // test subprocess with controlled arguments
-	cmd = exec.CommandContext(ctx, binaryPath, "--config", configPath)
+	cmd = exec.CommandContext(ctx, binaryPath, "serve", "-config", configPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("Failed to start server: %v", err)
 	}
 	defer func() { _ = cmd.Process.Kill() }()
 
 	// Wait for server to be ready
-	time.Sleep(2 * time.Second)
+	t.Log("Waiting for server to be ready...")
+	healthURL := "http://127.0.0.1:18082/api/health"
+	var serverReady bool
+	for i := 0; i < 30; i++ { // Try for up to 30 seconds
+		time.Sleep(1 * time.Second)
+		resp, err := http.Get(healthURL)
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				serverReady = true
+				t.Logf("Server ready after %d seconds", i+1)
+				break
+			}
+		}
+	}
+	if !serverReady {
+		t.Fatal("Server did not become ready within 30 seconds")
+	}
 
 	// Step 4: Create session
 	t.Log("Creating session...")
+	workspaceDir := t.TempDir()
 	reqBody := map[string]interface{}{
 		"jsonrpc": "2.0",
 		"method":  "session/new",
 		"params": map[string]interface{}{
-			"workingDirectory": "/workspace",
+			"workingDirectory": workspaceDir,
 		},
 		"id": 1,
 	}

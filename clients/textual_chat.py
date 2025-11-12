@@ -476,7 +476,8 @@ class ACPChatApp(App):
                 return
 
             # Send session/history request
-            msg_id = 998  # Use high ID to avoid conflicts
+            msg_id = self.msg_id
+            self.msg_id += 1
             await self.send_message("session/history", {"sessionId": self.session_id}, msg_id)
 
             # Wait for response
@@ -510,7 +511,7 @@ class ACPChatApp(App):
                                 try:
                                     dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
                                     display_time = dt.strftime("%H:%M:%S")
-                                except:
+                                except Exception:
                                     display_time = datetime.now().strftime("%H:%M:%S")
 
                                 messages_container = self.query_one("#messages", ScrollableContainer)
@@ -527,7 +528,7 @@ class ACPChatApp(App):
                             try:
                                 dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
                                 display_time = dt.strftime("%H:%M:%S")
-                            except:
+                            except Exception:
                                 display_time = datetime.now().strftime("%H:%M:%S")
 
                             if session_update_type == "available_commands_update":
@@ -909,11 +910,13 @@ async def get_all_sessions_from_relay(websocket) -> list:
     """Get list of all sessions from the relay server via WebSocket"""
     try:
         # Send session/list request
+        # Use a unique ID that won't conflict with normal message IDs
+        request_id = 1  # This is called early before msg_id counter starts at 2
         request = {
             "jsonrpc": "2.0",
             "method": "session/list",
             "params": {},
-            "id": 999  # Use high ID to avoid conflicts
+            "id": request_id
         }
         await websocket.send(json.dumps(request))
 
@@ -921,7 +924,7 @@ async def get_all_sessions_from_relay(websocket) -> list:
         raw_msg = await asyncio.wait_for(websocket.recv(), timeout=5.0)
         msg = json.loads(raw_msg)
 
-        if msg.get("id") == 999 and "result" in msg:
+        if msg.get("id") == request_id and "result" in msg:
             sessions = msg["result"].get("sessions", [])
             # Convert to format expected by SessionSelectionScreen
             formatted_sessions = []

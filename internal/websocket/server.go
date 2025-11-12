@@ -166,6 +166,7 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 
 		case "session/list":
 			// List all sessions from database
+			// TODO(security): Add authorization - currently any client can list all sessions
 			sessions, err := s.sessionMgr.ListSessions()
 			if err != nil {
 				s.sendLLMError(conn, currentSession, currentClientID, errors.NewInternalError(fmt.Sprintf("failed to get sessions: %v", err)), req.ID)
@@ -196,6 +197,7 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 
 		case "session/history":
 			// Get message history for a session
+			// TODO(security): Add authorization - currently any client can read any session's history
 			var params struct {
 				SessionID string `json:"sessionId"`
 			}
