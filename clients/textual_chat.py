@@ -944,8 +944,6 @@ async def get_all_sessions_from_relay(websocket) -> list:
         print(f"Failed to get sessions from relay: {e}")
         return []
 
-    return []
-
 
 def main():
     """Entry point"""
