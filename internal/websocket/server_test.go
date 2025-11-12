@@ -305,3 +305,78 @@ func TestWebSocketSessionList(t *testing.T) {
 	assert.Contains(t, sess1, "closedAt")
 	assert.Contains(t, sess1, "isActive")
 }
+
+func TestWebSocketSessionHistory(t *testing.T) {
+	// Setup test database
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	database, err := db.Open(dbPath)
+	require.NoError(t, err)
+	defer func() { _ = database.Close() }()
+
+	// Create test session
+	sessionID := "sess_test1"
+	require.NoError(t, database.CreateSession(sessionID, "/tmp/workspace"))
+
+	// Log some test messages
+	msg1 := []byte(`{"jsonrpc":"2.0","method":"session/prompt","params":{"content":[{"type":"text","text":"hello"}]},"id":1}`)
+	require.NoError(t, database.LogMessage(sessionID, db.DirectionClientToRelay, msg1))
+
+	msg2 := []byte(`{"jsonrpc":"2.0","result":{"content":[{"type":"text","text":"hi"}]},"id":1}`)
+	require.NoError(t, database.LogMessage(sessionID, db.DirectionRelayToClient, msg2))
+
+	// Setup manager
+	mgr := session.NewManager(session.ManagerConfig{
+		Mode:         "process",
+		AgentCommand: "/bin/echo",
+	}, database)
+
+	// Setup WebSocket server
+	ws := NewServer(mgr)
+
+	// Create test server
+	server := httptest.NewServer(ws)
+	defer server.Close()
+
+	// Connect via WebSocket
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil) //nolint:bodyclose // websocket connection, not HTTP response
+	require.NoError(t, err)
+	defer func() { _ = conn.Close() }()
+
+	// Send session/history request
+	req := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"method":  "session/history",
+		"params": map[string]interface{}{
+			"sessionId": sessionID,
+		},
+		"id": 1,
+	}
+	require.NoError(t, conn.WriteJSON(req))
+
+	// Read response
+	var resp map[string]interface{}
+	require.NoError(t, conn.ReadJSON(&resp))
+
+	// Verify response structure
+	assert.Equal(t, "2.0", resp["jsonrpc"])
+	assert.Equal(t, float64(1), resp["id"])
+
+	// Verify result contains messages
+	result, ok := resp["result"].(map[string]interface{})
+	require.True(t, ok, "result should be an object")
+
+	messages, ok := result["messages"].([]interface{})
+	require.True(t, ok, "messages should be an array")
+	assert.Equal(t, 2, len(messages), "should have 2 messages")
+
+	// Verify first message structure
+	msg := messages[0].(map[string]interface{})
+	assert.Contains(t, msg, "id")
+	assert.Contains(t, msg, "direction")
+	assert.Contains(t, msg, "messageType")
+	assert.Contains(t, msg, "method")
+	assert.Contains(t, msg, "rawMessage")
+	assert.Contains(t, msg, "timestamp")
+}

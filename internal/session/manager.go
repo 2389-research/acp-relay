@@ -275,3 +275,11 @@ func (m *Manager) ListSessions() ([]db.Session, error) {
 	}
 	return m.db.GetAllSessions()
 }
+
+// GetSessionHistory returns all messages for a session from the database.
+func (m *Manager) GetSessionHistory(sessionID string) ([]db.Message, error) {
+	if m.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	return m.db.GetSessionMessages(sessionID)
+}

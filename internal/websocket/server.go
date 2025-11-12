@@ -194,6 +194,44 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			}
 			s.sendResponseSafe(conn, currentSession, currentClientID, result, req.ID)
 
+		case "session/history":
+			// Get message history for a session
+			var params struct {
+				SessionID string `json:"sessionId"`
+			}
+			if err := json.Unmarshal(req.Params, &params); err != nil {
+				s.sendLLMError(conn, currentSession, currentClientID, errors.NewInvalidParamsError("sessionId", "string", "invalid or missing"), req.ID)
+				continue
+			}
+
+			messages, err := s.sessionMgr.GetSessionHistory(params.SessionID)
+			if err != nil {
+				s.sendLLMError(conn, currentSession, currentClientID, errors.NewInternalError(fmt.Sprintf("failed to get session messages: %v", err)), req.ID)
+				continue
+			}
+
+			// Convert to JSON-friendly format
+			messageList := make([]map[string]interface{}, len(messages))
+			for i, msg := range messages {
+				messageList[i] = map[string]interface{}{
+					"id":          msg.ID,
+					"direction":   string(msg.Direction),
+					"messageType": msg.MessageType,
+					"method":      msg.Method,
+					"rawMessage":  msg.RawMessage,
+					"timestamp":   msg.Timestamp.Format(time.RFC3339),
+				}
+				if msg.JSONRPCId != nil {
+					messageList[i]["jsonrpcId"] = *msg.JSONRPCId
+				}
+			}
+
+			result := map[string]interface{}{
+				"sessionId": params.SessionID,
+				"messages":  messageList,
+			}
+			s.sendResponseSafe(conn, currentSession, currentClientID, result, req.ID)
+
 		case "session/prompt":
 			// Forward to agent, translating "content" to "prompt" per ACP spec
 			if currentSession == nil {
