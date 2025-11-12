@@ -493,12 +493,12 @@ class ACPChatApp(App):
             # Replay messages in the UI
             for message_record in messages:
                 direction = message_record.get("direction")
-                raw_msg = message_record.get("rawMessage", "{}")
+                raw_message = message_record.get("rawMessage", "{}")
                 timestamp_str = message_record.get("timestamp", "")
                 method = message_record.get("method", "")
 
                 try:
-                    parsed_msg = json.loads(raw_msg)
+                    parsed_msg = json.loads(raw_message)
 
                     # Handle client->relay messages (user prompts)
                     if direction == "client_to_relay" and method == "session/prompt":
