@@ -4,7 +4,7 @@
 
 **Goal:** Build an interactive terminal UI for acp-relay using Bubbletea with session management, chat interface, and WebSocket integration.
 
-**Architecture:** 3-layer architecture: Bubbletea application layer (cmd/tui), reusable components layer (internal/tui/components), and client layer (internal/tui/client) for WebSocket communication. Uses Elm architecture (Model-Update-View) with channel-based async message passing.
+**Architecture:** 3-layer architecture: Bubbletea application layer (cmd/tui), reusable components layer (clients/tui/components), and client layer (clients/tui/client) for WebSocket communication. Uses Elm architecture (Model-Update-View) with channel-based async message passing.
 
 **Tech Stack:** Go 1.24, Bubbletea v0.25, Bubbles v0.18, Lipgloss v0.9, gorilla/websocket v1.5
 
@@ -14,9 +14,9 @@
 
 **Files:**
 - Create: `cmd/tui/main.go`
-- Create: `internal/tui/model.go`
-- Create: `internal/tui/update.go`
-- Create: `internal/tui/view.go`
+- Create: `clients/tui/model.go`
+- Create: `clients/tui/update.go`
+- Create: `clients/tui/view.go`
 - Modify: `go.mod`
 - Modify: `Makefile`
 
@@ -45,7 +45,7 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/harper/acp-relay/internal/tui"
+	"github.com/harper/acp-relay/clients/tui"
 )
 
 var (
@@ -70,7 +70,7 @@ func main() {
 
 **Step 3: Create minimal model**
 
-Create `internal/tui/model.go`:
+Create `clients/tui/model.go`:
 ```go
 // ABOUTME: Core Bubbletea model and state management for the TUI
 // ABOUTME: Implements the Model interface with Init, Update, and View methods
@@ -96,7 +96,7 @@ func (m Model) Init() tea.Cmd {
 
 **Step 4: Create update handler**
 
-Create `internal/tui/update.go`:
+Create `clients/tui/update.go`:
 ```go
 // ABOUTME: Update logic for the TUI (handles all messages and state transitions)
 // ABOUTME: Implements the Elm architecture Update function
@@ -126,7 +126,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 **Step 5: Create view renderer**
 
-Create `internal/tui/view.go`:
+Create `clients/tui/view.go`:
 ```go
 // ABOUTME: View rendering for the TUI (converts model state to terminal output)
 // ABOUTME: Implements the Elm architecture View function
@@ -158,7 +158,7 @@ clean-tui:
 	rm -f bin/acp-tui
 
 test-tui:
-	go test ./internal/tui/... -v -cover
+	go test ./clients/tui/... -v -cover
 
 dev-tui: build-tui
 	./bin/acp-tui
@@ -179,7 +179,7 @@ Expected: TUI launches, shows window size, press 'q' to quit
 **Step 8: Commit**
 
 ```bash
-git add cmd/tui/ internal/tui/ go.mod go.sum Makefile
+git add cmd/tui/ clients/tui/ go.mod go.sum Makefile
 git commit -m "feat(tui): add minimal Bubbletea application scaffold
 
 - Add main entry point with Bubbletea initialization
@@ -193,13 +193,13 @@ git commit -m "feat(tui): add minimal Bubbletea application scaffold
 ## Task 2: Configuration System
 
 **Files:**
-- Create: `internal/tui/config/config.go`
-- Create: `internal/tui/config/config_test.go`
+- Create: `clients/tui/config/config.go`
+- Create: `clients/tui/config/config_test.go`
 - Modify: `cmd/tui/main.go`
 
 **Step 1: Write test for config loading**
 
-Create `internal/tui/config/config_test.go`:
+Create `clients/tui/config/config_test.go`:
 ```go
 // ABOUTME: Unit tests for TUI configuration loading and validation
 // ABOUTME: Tests default config, file loading, validation, and XDG path expansion
@@ -258,13 +258,13 @@ func TestValidate_SidebarWidth(t *testing.T) {
 
 **Step 2: Run test to verify it fails**
 
-Run: `go test ./internal/tui/config -v`
+Run: `go test ./clients/tui/config -v`
 
 Expected: FAIL with "package not found" or "function not defined"
 
 **Step 3: Implement config structure**
 
-Create `internal/tui/config/config.go`:
+Create `clients/tui/config/config.go`:
 ```go
 // ABOUTME: TUI configuration system with XDG-compliant file loading
 // ABOUTME: Handles config loading, validation, defaults, and theme selection
@@ -439,7 +439,7 @@ func saveDefault(cfg *Config, path string) error {
 
 **Step 4: Run tests to verify they pass**
 
-Run: `go test ./internal/tui/config -v`
+Run: `go test ./clients/tui/config -v`
 
 Expected: PASS (3 tests)
 
@@ -455,8 +455,8 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/harper/acp-relay/internal/tui"
-	"github.com/harper/acp-relay/internal/tui/config"
+	"github.com/harper/acp-relay/clients/tui"
+	"github.com/harper/acp-relay/clients/tui/config"
 )
 
 var (
@@ -504,13 +504,13 @@ func main() {
 
 **Step 6: Update model to accept config**
 
-Modify `internal/tui/model.go`:
+Modify `clients/tui/model.go`:
 ```go
 package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/harper/acp-relay/internal/tui/config"
+	"github.com/harper/acp-relay/clients/tui/config"
 )
 
 type Model struct {
@@ -547,7 +547,7 @@ Expected: TUI launches, config file created at `~/.config/acp-tui/config.yaml`
 **Step 8: Commit**
 
 ```bash
-git add internal/tui/config/ cmd/tui/main.go internal/tui/model.go
+git add clients/tui/config/ cmd/tui/main.go clients/tui/model.go
 git commit -m "feat(tui): add configuration system
 
 - Implement config loading with XDG paths
@@ -562,13 +562,13 @@ git commit -m "feat(tui): add configuration system
 ## Task 3: Theme System
 
 **Files:**
-- Create: `internal/tui/theme/theme.go`
-- Create: `internal/tui/theme/theme_test.go`
-- Modify: `internal/tui/model.go`
+- Create: `clients/tui/theme/theme.go`
+- Create: `clients/tui/theme/theme_test.go`
+- Modify: `clients/tui/model.go`
 
 **Step 1: Write theme tests**
 
-Create `internal/tui/theme/theme_test.go`:
+Create `clients/tui/theme/theme_test.go`:
 ```go
 // ABOUTME: Unit tests for theme system and lipgloss style generation
 // ABOUTME: Tests theme loading, style construction, and color application
@@ -614,13 +614,13 @@ func TestTheme_SidebarStyle(t *testing.T) {
 
 **Step 2: Run test to verify it fails**
 
-Run: `go test ./internal/tui/theme -v`
+Run: `go test ./clients/tui/theme -v`
 
 Expected: FAIL
 
 **Step 3: Implement theme system**
 
-Create `internal/tui/theme/theme.go`:
+Create `clients/tui/theme/theme.go`:
 ```go
 // ABOUTME: Theme system for TUI styling with lipgloss
 // ABOUTME: Provides predefined themes and style constructors for UI components
@@ -758,20 +758,20 @@ func (t Theme) DimStyle() lipgloss.Style {
 
 **Step 4: Run tests to verify they pass**
 
-Run: `go test ./internal/tui/theme -v`
+Run: `go test ./clients/tui/theme -v`
 
 Expected: PASS (4 tests)
 
 **Step 5: Integrate theme into model**
 
-Modify `internal/tui/model.go`:
+Modify `clients/tui/model.go`:
 ```go
 package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/harper/acp-relay/internal/tui/config"
-	"github.com/harper/acp-relay/internal/tui/theme"
+	"github.com/harper/acp-relay/clients/tui/config"
+	"github.com/harper/acp-relay/clients/tui/theme"
 )
 
 type Model struct {
@@ -795,7 +795,7 @@ func (m Model) Init() tea.Cmd {
 
 **Step 6: Update view to use theme**
 
-Modify `internal/tui/view.go`:
+Modify `clients/tui/view.go`:
 ```go
 package tui
 
@@ -842,7 +842,7 @@ Expected: TUI shows green/black high contrast theme
 **Step 8: Commit**
 
 ```bash
-git add internal/tui/theme/ internal/tui/model.go internal/tui/view.go
+git add clients/tui/theme/ clients/tui/model.go clients/tui/view.go
 git commit -m "feat(tui): add theme system with lipgloss styles
 
 - Implement default, dark, and light themes
@@ -856,12 +856,12 @@ git commit -m "feat(tui): add theme system with lipgloss styles
 ## Task 4: WebSocket Client
 
 **Files:**
-- Create: `internal/tui/client/relay_client.go`
-- Create: `internal/tui/client/relay_client_test.go`
+- Create: `clients/tui/client/relay_client.go`
+- Create: `clients/tui/client/relay_client_test.go`
 
 **Step 1: Write client tests**
 
-Create `internal/tui/client/relay_client_test.go`:
+Create `clients/tui/client/relay_client_test.go`:
 ```go
 // ABOUTME: Unit tests for WebSocket relay client
 // ABOUTME: Tests connection, message sending/receiving, and reconnection logic
@@ -951,13 +951,13 @@ func TestRelayClient_ErrorChannel(t *testing.T) {
 
 **Step 2: Run test to verify it fails**
 
-Run: `go test ./internal/tui/client -v`
+Run: `go test ./clients/tui/client -v`
 
 Expected: FAIL
 
 **Step 3: Implement WebSocket client**
 
-Create `internal/tui/client/relay_client.go`:
+Create `clients/tui/client/relay_client.go`:
 ```go
 // ABOUTME: WebSocket client for communicating with acp-relay server
 // ABOUTME: Manages connection lifecycle, message passing via channels, and auto-reconnection
@@ -1107,13 +1107,13 @@ func (c *RelayClient) writeLoop() {
 
 **Step 4: Run tests to verify they pass**
 
-Run: `go test ./internal/tui/client -v`
+Run: `go test ./clients/tui/client -v`
 
 Expected: PASS (3 tests)
 
 **Step 5: Add integration with Bubbletea messages**
 
-Add to `internal/tui/client/relay_client.go`:
+Add to `clients/tui/client/relay_client.go`:
 ```go
 // Bubbletea message types for async communication
 
@@ -1144,14 +1144,14 @@ Add import: `tea "github.com/charmbracelet/bubbletea"`
 
 **Step 6: Test build**
 
-Run: `go test ./internal/tui/client -v`
+Run: `go test ./clients/tui/client -v`
 
 Expected: PASS
 
 **Step 7: Commit**
 
 ```bash
-git add internal/tui/client/
+git add clients/tui/client/
 git commit -m "feat(tui): add WebSocket relay client
 
 - Implement client with channel-based async I/O
@@ -1165,12 +1165,12 @@ git commit -m "feat(tui): add WebSocket relay client
 ## Task 5: Session Manager
 
 **Files:**
-- Create: `internal/tui/client/session_manager.go`
-- Create: `internal/tui/client/session_manager_test.go`
+- Create: `clients/tui/client/session_manager.go`
+- Create: `clients/tui/client/session_manager_test.go`
 
 **Step 1: Write session manager tests**
 
-Create `internal/tui/client/session_manager_test.go`:
+Create `clients/tui/client/session_manager_test.go`:
 ```go
 // ABOUTME: Unit tests for session manager (CRUD operations)
 // ABOUTME: Tests session creation, listing, deletion, and state management
@@ -1255,13 +1255,13 @@ func TestSessionManager_UpdateStatus(t *testing.T) {
 
 **Step 2: Run test to verify it fails**
 
-Run: `go test ./internal/tui/client -v`
+Run: `go test ./clients/tui/client -v`
 
 Expected: FAIL
 
 **Step 3: Implement session manager**
 
-Create `internal/tui/client/session_manager.go`:
+Create `clients/tui/client/session_manager.go`:
 ```go
 // ABOUTME: Session manager for CRUD operations on agent sessions
 // ABOUTME: Maintains session list, status tracking, and message history
@@ -1413,14 +1413,14 @@ func (sm *SessionManager) Rename(id, newName string) error {
 
 **Step 4: Run tests to verify they pass**
 
-Run: `go test ./internal/tui/client -v`
+Run: `go test ./clients/tui/client -v`
 
 Expected: PASS (all tests including new session manager tests)
 
 **Step 5: Commit**
 
 ```bash
-git add internal/tui/client/session_manager.go internal/tui/client/session_manager_test.go
+git add clients/tui/client/session_manager.go clients/tui/client/session_manager_test.go
 git commit -m "feat(tui): add session manager with CRUD operations
 
 - Implement session creation, listing, deletion
@@ -1434,12 +1434,12 @@ git commit -m "feat(tui): add session manager with CRUD operations
 ## Task 6: Message Store
 
 **Files:**
-- Create: `internal/tui/client/message_store.go`
-- Create: `internal/tui/client/message_store_test.go`
+- Create: `clients/tui/client/message_store.go`
+- Create: `clients/tui/client/message_store_test.go`
 
 **Step 1: Write message store tests**
 
-Create `internal/tui/client/message_store_test.go`:
+Create `clients/tui/client/message_store_test.go`:
 ```go
 // ABOUTME: Unit tests for message store (per-session message history)
 // ABOUTME: Tests message storage, retrieval, and history limits
@@ -1525,13 +1525,13 @@ func TestMessageStore_Clear(t *testing.T) {
 
 **Step 2: Run test to verify it fails**
 
-Run: `go test ./internal/tui/client -v`
+Run: `go test ./clients/tui/client -v`
 
 Expected: FAIL
 
 **Step 3: Implement message store**
 
-Create `internal/tui/client/message_store.go`:
+Create `clients/tui/client/message_store.go`:
 ```go
 // ABOUTME: Message store for maintaining per-session chat history
 // ABOUTME: Implements FIFO queue with configurable history limits
@@ -1649,7 +1649,7 @@ func (ms *MessageStore) ClearAll() {
 
 **Step 4: Add missing import to test**
 
-Add to `internal/tui/client/message_store_test.go`:
+Add to `clients/tui/client/message_store_test.go`:
 ```go
 import (
 	"fmt"
@@ -1659,14 +1659,14 @@ import (
 
 **Step 5: Run tests to verify they pass**
 
-Run: `go test ./internal/tui/client -v`
+Run: `go test ./clients/tui/client -v`
 
 Expected: PASS (all tests)
 
 **Step 6: Commit**
 
 ```bash
-git add internal/tui/client/message_store.go internal/tui/client/message_store_test.go
+git add clients/tui/client/message_store.go clients/tui/client/message_store_test.go
 git commit -m "feat(tui): add message store with history management
 
 - Implement per-session message storage
@@ -1680,12 +1680,12 @@ git commit -m "feat(tui): add message store with history management
 ## Task 7: Sidebar Component
 
 **Files:**
-- Create: `internal/tui/components/sidebar.go`
-- Create: `internal/tui/components/sidebar_test.go`
+- Create: `clients/tui/components/sidebar.go`
+- Create: `clients/tui/components/sidebar_test.go`
 
 **Step 1: Write sidebar tests**
 
-Create `internal/tui/components/sidebar_test.go`:
+Create `clients/tui/components/sidebar_test.go`:
 ```go
 // ABOUTME: Unit tests for sidebar component (session list display)
 // ABOUTME: Tests rendering, navigation, and session selection
@@ -1695,8 +1695,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/harper/acp-relay/internal/tui/client"
-	"github.com/harper/acp-relay/internal/tui/theme"
+	"github.com/harper/acp-relay/clients/tui/client"
+	"github.com/harper/acp-relay/clients/tui/theme"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -1784,13 +1784,13 @@ func TestSidebar_EmptySessions(t *testing.T) {
 
 **Step 2: Run test to verify it fails**
 
-Run: `go test ./internal/tui/components -v`
+Run: `go test ./clients/tui/components -v`
 
 Expected: FAIL
 
 **Step 3: Implement sidebar component**
 
-Create `internal/tui/components/sidebar.go`:
+Create `clients/tui/components/sidebar.go`:
 ```go
 // ABOUTME: Sidebar component for displaying session list
 // ABOUTME: Handles session navigation, rendering, and selection
@@ -1801,8 +1801,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/harper/acp-relay/internal/tui/client"
-	"github.com/harper/acp-relay/internal/tui/theme"
+	"github.com/harper/acp-relay/clients/tui/client"
+	"github.com/harper/acp-relay/clients/tui/theme"
 )
 
 type Sidebar struct {
@@ -1940,14 +1940,14 @@ items = append(items, line)
 
 **Step 5: Run tests to verify they pass**
 
-Run: `go test ./internal/tui/components -v`
+Run: `go test ./clients/tui/components -v`
 
 Expected: PASS (all sidebar tests)
 
 **Step 6: Commit**
 
 ```bash
-git add internal/tui/components/
+git add clients/tui/components/
 git commit -m "feat(tui): add sidebar component for session list
 
 - Implement session list rendering with status icons
