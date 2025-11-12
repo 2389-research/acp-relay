@@ -166,13 +166,7 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 
 		case "session/list":
 			// List all sessions from database
-			database := s.sessionMgr.GetDB()
-			if database == nil {
-				s.sendLLMError(conn, currentSession, currentClientID, errors.NewInternalError("database not available"), req.ID)
-				continue
-			}
-
-			sessions, err := database.GetAllSessions()
+			sessions, err := s.sessionMgr.ListSessions()
 			if err != nil {
 				s.sendLLMError(conn, currentSession, currentClientID, errors.NewInternalError(fmt.Sprintf("failed to get sessions: %v", err)), req.ID)
 				continue

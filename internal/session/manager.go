@@ -268,6 +268,10 @@ func (m *Manager) GetSession(sessionID string) (*Session, bool) {
 	return sess, exists
 }
 
-func (m *Manager) GetDB() *db.DB {
-	return m.db
+// ListSessions returns all sessions from the database.
+func (m *Manager) ListSessions() ([]db.Session, error) {
+	if m.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	return m.db.GetAllSessions()
 }
