@@ -469,48 +469,68 @@ class ACPChatApp(App):
             self.notify(f"Failed to load session: {e}", severity="error")
 
     async def load_session_history(self):
-        """Load previous messages from the database"""
+        """Load previous messages from the relay server via WebSocket"""
         try:
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.execute("""
-                SELECT direction, message_type, method, raw_message, timestamp
-                FROM messages
-                WHERE session_id = ?
-                ORDER BY timestamp ASC
-            """, (self.session_id,))
+            if not self.websocket:
+                self.notify("Not connected to relay", severity="error")
+                return
 
-            for row in cursor:
-                direction, msg_type, method, raw_msg, timestamp = row
+            # Send session/history request
+            msg_id = 998  # Use high ID to avoid conflicts
+            await self.send_message("session/history", {"sessionId": self.session_id}, msg_id)
+
+            # Wait for response
+            raw_msg = await asyncio.wait_for(self.websocket.recv(), timeout=10.0)
+            msg = json.loads(raw_msg)
+
+            if msg.get("id") != msg_id or "result" not in msg:
+                self.notify("Invalid response from relay", severity="error")
+                return
+
+            messages = msg["result"].get("messages", [])
+
+            # Replay messages in the UI
+            for message_record in messages:
+                direction = message_record.get("direction")
+                raw_msg = message_record.get("rawMessage", "{}")
+                timestamp_str = message_record.get("timestamp", "")
+                method = message_record.get("method", "")
 
                 try:
-                    msg = json.loads(raw_msg)
+                    parsed_msg = json.loads(raw_msg)
 
-                    # Replay messages in the UI
+                    # Handle client->relay messages (user prompts)
                     if direction == "client_to_relay" and method == "session/prompt":
-                        # User message
-                        params = msg.get("params", {})
+                        params = parsed_msg.get("params", {})
                         content = params.get("content", [])
                         if content and len(content) > 0:
                             text = content[0].get("text", "")
                             if text:
-                                timestamp_str = datetime.fromisoformat(timestamp).strftime("%H:%M:%S")
-                                messages = self.query_one("#messages", ScrollableContainer)
-                                messages.mount(ChatMessage("user", text, timestamp_str))
+                                # Convert ISO timestamp to HH:MM:SS
+                                try:
+                                    dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                                    display_time = dt.strftime("%H:%M:%S")
+                                except:
+                                    display_time = datetime.now().strftime("%H:%M:%S")
 
-                    elif direction == "relay_to_client" and "method" in msg:
-                        # Session updates - show system messages
-                        if msg.get("method") == "session/update":
-                            params = msg.get("params", {})
+                                messages_container = self.query_one("#messages", ScrollableContainer)
+                                messages_container.mount(ChatMessage("user", text, display_time))
+
+                    # Handle relay->client messages (session updates)
+                    elif direction == "relay_to_client" and "method" in parsed_msg:
+                        if parsed_msg.get("method") == "session/update":
+                            params = parsed_msg.get("params", {})
                             update = params.get("update", {})
                             session_update_type = update.get("sessionUpdate")
 
-                            timestamp_str = datetime.fromisoformat(timestamp).strftime("%H:%M:%S")
+                            # Convert ISO timestamp to HH:MM:SS
+                            try:
+                                dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                                display_time = dt.strftime("%H:%M:%S")
+                            except:
+                                display_time = datetime.now().strftime("%H:%M:%S")
 
-                            if session_update_type == "agent_message_chunk":
-                                # Collect agent message chunks
-                                # For history, we'll just show the final text
-                                pass
-                            elif session_update_type == "available_commands_update":
+                            if session_update_type == "available_commands_update":
                                 commands = update.get("availableCommands", [])
                                 self.add_system_message(
                                     "",
@@ -521,13 +541,13 @@ class ACPChatApp(App):
                 except json.JSONDecodeError:
                     pass
 
-            conn.close()
-
             # Scroll to bottom
-            messages = self.query_one("#messages", ScrollableContainer)
-            messages.scroll_end(animate=False)
+            messages_container = self.query_one("#messages", ScrollableContainer)
+            messages_container.scroll_end(animate=False)
 
-        except (sqlite3.Error, FileNotFoundError) as e:
+        except asyncio.TimeoutError:
+            self.notify("Timeout loading session history", severity="warning")
+        except Exception as e:
             self.notify(f"Could not load history: {e}", severity="warning")
 
     async def send_message(self, method: str, params: dict, msg_id: int):
