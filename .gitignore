@@ -33,3 +33,4 @@ coverage.html
 
 # TUI binary (not internal/tui source)
 /tui
+/acp-tui

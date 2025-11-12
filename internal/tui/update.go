@@ -79,11 +79,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Show session selection modal
 		DebugLog("Update: showSessionSelectionMsg - showing modal with %d sessions", len(msg.Sessions))
 
-		// Import screens package to create modal
-		// We need to add this import at the top of the file
+		// Create modal with current dimensions
 		m.sessionModal = createSessionSelectionScreen(msg.Sessions, m.width, m.height, m.theme)
 
-		return m, nil
+		// Call Init() on the modal to get any initialization commands and trigger redraw
+		cmd := m.sessionModal.Init()
+		return m, cmd
 
 	case sessionSelectedMsg:
 		// User selected a session from modal
