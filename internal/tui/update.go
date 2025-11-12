@@ -338,7 +338,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.statusBar.HideProgress()
 
 			case "session/update":
-				// Session status update (available_commands, tool_use, thinking, thought_chunk)
+				// Session status update (available_commands, tool_use, thinking, thought_chunk, agent_message_chunk)
 				handled = true
 				DebugLog("Update: session/update received")
 
@@ -887,6 +887,7 @@ func (m Model) onSendMessage() Model {
 	m.statusBar.ShowProgress()
 	m.chatView.StartTyping()
 	m.currentResponse = ""
+	m.currentThought = ""
 
 	// Send message to relay server
 	if m.relayClient.IsConnected() {

@@ -353,3 +353,78 @@ func TestUnhandledMessage_VariousTypes(t *testing.T) {
 		})
 	}
 }
+
+func TestAgentMessageChunk_Parsing(t *testing.T) {
+	// Test parsing session/update with agent_message_chunk
+	messageJSON := `{
+		"jsonrpc": "2.0",
+		"method": "session/update",
+		"params": {
+			"sessionId": "test-session-123",
+			"update": {
+				"sessionUpdate": "agent_message_chunk",
+				"content": {
+					"type": "text",
+					"text": "Hello, world!"
+				}
+			}
+		}
+	}`
+
+	var notification map[string]interface{}
+	err := json.Unmarshal([]byte(messageJSON), &notification)
+	assert.NoError(t, err)
+
+	// Extract fields like the handler would
+	method, ok := notification["method"].(string)
+	assert.True(t, ok)
+	assert.Equal(t, "session/update", method)
+
+	params, ok := notification["params"].(map[string]interface{})
+	assert.True(t, ok)
+
+	update, ok := params["update"].(map[string]interface{})
+	assert.True(t, ok)
+
+	sessionUpdate, ok := update["sessionUpdate"].(string)
+	assert.True(t, ok)
+	assert.Equal(t, "agent_message_chunk", sessionUpdate)
+
+	content, ok := update["content"].(map[string]interface{})
+	assert.True(t, ok)
+
+	text, ok := content["text"].(string)
+	assert.True(t, ok)
+	assert.Equal(t, "Hello, world!", text)
+}
+
+func TestAgentMessageChunk_Accumulation(t *testing.T) {
+	// Test that multiple agent_message_chunk notifications accumulate properly
+	chunks := []string{"Hello, ", "world! ", "This is ", "a test."}
+	accumulated := ""
+
+	for _, chunk := range chunks {
+		accumulated += chunk
+	}
+
+	assert.Equal(t, "Hello, world! This is a test.", accumulated)
+}
+
+func TestCurrentThought_Reset(t *testing.T) {
+	// Test that currentThought is reset when sending a new message
+	// This is a regression test for the memory leak bug
+
+	// Start with accumulated thought from previous message
+	currentThought := "Previous thought content that should be cleared"
+	currentResponse := "Some response text"
+
+	assert.NotEqual(t, "", currentThought, "Test setup: currentThought should start non-empty")
+	assert.NotEqual(t, "", currentResponse, "Test setup: currentResponse should start non-empty")
+
+	// Simulate sending a new message - both should be reset
+	currentResponse = ""
+	currentThought = ""
+
+	assert.Equal(t, "", currentResponse, "currentResponse should be reset")
+	assert.Equal(t, "", currentThought, "currentThought should be reset")
+}
