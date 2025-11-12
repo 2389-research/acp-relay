@@ -6,8 +6,10 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/harper/acp-relay/internal/db"
@@ -161,6 +163,42 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 				"clientId":  currentClientID,
 			}
 			s.sendResponseSafe(conn, sess, currentClientID, result, req.ID)
+
+		case "session/list":
+			// List all sessions from database
+			database := s.sessionMgr.GetDB()
+			if database == nil {
+				s.sendLLMError(conn, currentSession, currentClientID, errors.NewInternalError("database not available"), req.ID)
+				continue
+			}
+
+			sessions, err := database.GetAllSessions()
+			if err != nil {
+				s.sendLLMError(conn, currentSession, currentClientID, errors.NewInternalError(fmt.Sprintf("failed to get sessions: %v", err)), req.ID)
+				continue
+			}
+
+			// Convert to JSON-friendly format
+			sessionList := make([]map[string]interface{}, len(sessions))
+			for i, sess := range sessions {
+				sessionList[i] = map[string]interface{}{
+					"id":               sess.ID,
+					"agentSessionId":   sess.AgentSessionID,
+					"workingDirectory": sess.WorkingDirectory,
+					"createdAt":        sess.CreatedAt.Format(time.RFC3339),
+					"closedAt":         nil,
+					"isActive":         sess.ClosedAt == nil,
+				}
+				if sess.ClosedAt != nil {
+					sessionList[i]["closedAt"] = sess.ClosedAt.Format(time.RFC3339)
+					sessionList[i]["isActive"] = false
+				}
+			}
+
+			result := map[string]interface{}{
+				"sessions": sessionList,
+			}
+			s.sendResponseSafe(conn, currentSession, currentClientID, result, req.ID)
 
 		case "session/prompt":
 			// Forward to agent, translating "content" to "prompt" per ACP spec

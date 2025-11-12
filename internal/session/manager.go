@@ -267,3 +267,7 @@ func (m *Manager) GetSession(sessionID string) (*Session, bool) {
 	sess, exists := m.sessions[sessionID]
 	return sess, exists
 }
+
+func (m *Manager) GetDB() *db.DB {
+	return m.db
+}

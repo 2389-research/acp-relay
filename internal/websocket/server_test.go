@@ -8,7 +8,10 @@ import (
 	"testing"
 
 	"github.com/gorilla/websocket"
+	"github.com/harper/acp-relay/internal/db"
 	"github.com/harper/acp-relay/internal/session"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestWebSocketConnection(t *testing.T) {
@@ -235,4 +238,70 @@ func TestMultiClientResume(t *testing.T) {
 	}
 
 	t.Logf("✓ Client 2 still works after Client 1 disconnected")
+}
+
+func TestWebSocketSessionList(t *testing.T) {
+	// Setup test database
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	database, err := db.Open(dbPath)
+	require.NoError(t, err)
+	defer func() { _ = database.Close() }()
+
+	// Create some test sessions
+	require.NoError(t, database.CreateSession("sess_test1", "/tmp/workspace1"))
+	require.NoError(t, database.CreateSession("sess_test2", "/tmp/workspace2"))
+	require.NoError(t, database.CloseSession("sess_test1"))
+
+	// Setup manager
+	mgr := session.NewManager(session.ManagerConfig{
+		Mode:         "process",
+		AgentCommand: "/bin/echo",
+	}, database)
+
+	// Setup WebSocket server
+	ws := NewServer(mgr)
+
+	// Create test server
+	server := httptest.NewServer(ws)
+	defer server.Close()
+
+	// Connect via WebSocket
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil) //nolint:bodyclose // websocket connection, not HTTP response
+	require.NoError(t, err)
+	defer func() { _ = conn.Close() }()
+
+	// Send session/list request
+	req := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"method":  "session/list",
+		"params":  map[string]interface{}{},
+		"id":      1,
+	}
+	require.NoError(t, conn.WriteJSON(req))
+
+	// Read response
+	var resp map[string]interface{}
+	require.NoError(t, conn.ReadJSON(&resp))
+
+	// Verify response structure
+	assert.Equal(t, "2.0", resp["jsonrpc"])
+	assert.Equal(t, float64(1), resp["id"])
+
+	// Verify result contains sessions
+	result, ok := resp["result"].(map[string]interface{})
+	require.True(t, ok, "result should be an object")
+
+	sessions, ok := result["sessions"].([]interface{})
+	require.True(t, ok, "sessions should be an array")
+	assert.Equal(t, 2, len(sessions), "should have 2 sessions")
+
+	// Verify first session structure
+	sess1 := sessions[0].(map[string]interface{})
+	assert.Contains(t, sess1, "id")
+	assert.Contains(t, sess1, "workingDirectory")
+	assert.Contains(t, sess1, "createdAt")
+	assert.Contains(t, sess1, "closedAt")
+	assert.Contains(t, sess1, "isActive")
 }
