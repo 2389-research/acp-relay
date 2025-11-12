@@ -10,8 +10,8 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/harper/acp-relay/internal/tui/client"
-	"github.com/harper/acp-relay/internal/tui/theme"
+	"github.com/harper/acp-relay/clients/tui/client"
+	"github.com/harper/acp-relay/clients/tui/theme"
 )
 
 type ChatView struct {

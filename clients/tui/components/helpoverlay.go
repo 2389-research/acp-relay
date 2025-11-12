@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/harper/acp-relay/internal/tui/theme"
+	"github.com/harper/acp-relay/clients/tui/theme"
 )
 
 // Shortcut represents a keyboard shortcut with its description.

@@ -4,10 +4,10 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/harper/acp-relay/internal/tui/client"
-	"github.com/harper/acp-relay/internal/tui/components"
-	"github.com/harper/acp-relay/internal/tui/config"
-	"github.com/harper/acp-relay/internal/tui/theme"
+	"github.com/harper/acp-relay/clients/tui/client"
+	"github.com/harper/acp-relay/clients/tui/components"
+	"github.com/harper/acp-relay/clients/tui/config"
+	"github.com/harper/acp-relay/clients/tui/theme"
 )
 
 // FocusArea represents which component currently has focus.

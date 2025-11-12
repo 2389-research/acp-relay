@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/harper/acp-relay/internal/tui/client"
-	"github.com/harper/acp-relay/internal/tui/theme"
+	"github.com/harper/acp-relay/clients/tui/client"
+	"github.com/harper/acp-relay/clients/tui/theme"
 )
 
 type Sidebar struct {

@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/harper/acp-relay/internal/tui/client"
-	"github.com/harper/acp-relay/internal/tui/theme"
+	"github.com/harper/acp-relay/clients/tui/client"
+	"github.com/harper/acp-relay/clients/tui/theme"
 )
 
 // FormatSystemMessage renders system messages based on their type.

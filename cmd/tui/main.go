@@ -8,8 +8,8 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/harper/acp-relay/internal/tui"
-	"github.com/harper/acp-relay/internal/tui/config"
+	"github.com/harper/acp-relay/clients/tui"
+	"github.com/harper/acp-relay/clients/tui/config"
 )
 
 var (

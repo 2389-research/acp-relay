@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/harper/acp-relay/internal/tui/theme"
+	"github.com/harper/acp-relay/clients/tui/theme"
 )
 
 func TestNewHelpOverlay(t *testing.T) {

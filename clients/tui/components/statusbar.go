@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/harper/acp-relay/internal/tui/theme"
+	"github.com/harper/acp-relay/clients/tui/theme"
 )
 
 type StatusBar struct {
