@@ -104,3 +104,68 @@ This ensures the default behavior is preserved for users without Docker.
 ## Notes
 
 Container support is fully implemented and unit-tested. The code is production-ready but requires Docker runtime for end-to-end verification of container functionality. All container-specific code paths are covered by unit tests with mocked Docker operations.
+
+---
+
+## TUI Relay API Integration - 2025-11-12
+
+**Tested:**
+- ✅ Session list via `session/list` API
+- ✅ Session history via `session/history` API
+- ✅ TUI function `get_all_sessions_from_relay()` successfully retrieves sessions
+- ✅ No direct database access from TUI (verified no sqlite3 imports)
+- ✅ All session data flows through relay WebSocket API
+- ✅ Relay API endpoints respond correctly with proper JSON-RPC format
+
+**Test Results:**
+
+### 1. Relay API Endpoints
+
+**session/list:**
+- ✅ Successfully returns all sessions from database
+- ✅ Includes session metadata (id, workingDirectory, createdAt, closedAt, isActive)
+- ✅ Properly formats timestamps in ISO 8601 format
+- ✅ Returns 2 sessions from test database
+
+**session/history:**
+- ✅ Successfully returns message history for specified session
+- ✅ Includes all message metadata (id, direction, messageType, method, rawMessage, timestamp)
+- ✅ Returns 13 messages for test session sess_9d9ead28
+- ✅ Messages include all directions (client_to_relay, relay_to_agent, agent_to_relay, relay_to_client)
+
+### 2. TUI Integration
+
+**Code Verification:**
+- ✅ No `import sqlite3` in textual_chat.py
+- ✅ No `DB_PATH` constant in textual_chat.py
+- ✅ `get_all_sessions_from_relay()` function implemented and working
+- ✅ Function successfully converts relay API response to TUI format
+
+**Integration Test:**
+- ✅ TUI function connects to relay WebSocket server
+- ✅ TUI function sends proper JSON-RPC session/list request
+- ✅ TUI function receives and parses relay response
+- ✅ TUI function converts response to expected format (snake_case keys)
+- ✅ Retrieved 2 sessions with correct metadata
+
+### 3. Relay Server Logs
+
+**Observed in logs:**
+- ✅ Server starts successfully on all ports
+- ✅ WebSocket connections accepted
+- ✅ Normal close (1000) after API calls complete
+- ✅ No errors or warnings during API calls
+
+**Manual Testing Notes:**
+- Since the TUI is an interactive terminal application, full end-to-end manual testing requires:
+  1. Creating a new session (requires user input)
+  2. Resuming an existing session (requires user input)
+  3. Viewing a closed session (requires user input)
+
+- Automated testing confirms:
+  - The relay API endpoints work correctly
+  - The TUI integration functions work correctly
+  - No direct database access from TUI
+
+**Conclusion:**
+All automated tests passing. TUI fully uses relay API instead of direct DB access. The refactoring successfully removes all SQLite dependencies from the TUI client and moves all session management to the relay server's WebSocket API.

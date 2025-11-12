@@ -6,6 +6,10 @@ name = "acp-relay-tools"
 version = "0.1.0"
 description = "Python tools and tests for acp-relay"
 requires-python = ">=3.10"
+dependencies = [
+    "textual>=6.6.0",
+    "websockets>=15.0.1",
+]
 
 [tool.ruff]
 # Ruff configuration for linting and formatting
