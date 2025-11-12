@@ -944,23 +944,6 @@ async def get_all_sessions_from_relay(websocket) -> list:
     return []
 
 
-def mark_session_closed(session_id: str, reason: str = "stale"):
-    """Mark a session as closed in the database"""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        from datetime import datetime
-        closed_at = datetime.now().isoformat()
-        conn.execute("""
-            UPDATE sessions
-            SET closed_at = ?
-            WHERE id = ?
-        """, (closed_at, session_id))
-        conn.commit()
-        conn.close()
-    except (sqlite3.Error, FileNotFoundError) as e:
-        print(f"Failed to mark session as closed: {e}")
-
-
 def main():
     """Entry point"""
     app = ACPChatApp()
