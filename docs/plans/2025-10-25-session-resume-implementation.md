@@ -1093,7 +1093,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 **Files:**
 - Modify: `examples/websocket_chat.py`
 - Modify: `examples/interactive_chat.py`
-- Modify: `examples/textual_chat.py`
+- Modify: `clients/textual_chat.py`
 
 **Step 1: Update websocket_chat.py**
 
@@ -1140,7 +1140,7 @@ Expected: Connects successfully, shows client ID
 **Step 5: Commit**
 
 ```bash
-git add examples/websocket_chat.py examples/interactive_chat.py examples/textual_chat.py
+git add examples/websocket_chat.py examples/interactive_chat.py clients/textual_chat.py
 git commit -m "feat: update examples to display client ID
 
 - Parse and display clientId from session/new response

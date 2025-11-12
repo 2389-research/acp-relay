@@ -4,7 +4,7 @@
 
 **Goal:** Bring golang TUI to feature parity with Python Textual chat implementation by adding critical missing features: session selection, session resume, permission system, SQLite history, and rich message types.
 
-**Context:** Audit of `examples/textual_chat.py` (876 lines) identified 15 missing features. This plan addresses the 11 critical/important features in 3 phases.
+**Context:** Audit of `clients/textual_chat.py` (876 lines) identified 15 missing features. This plan addresses the 11 critical/important features in 3 phases.
 
 **Base Implementation:** Existing golang TUI has basic architecture, WebSocket client, message store, components. See git log for recent work.
 

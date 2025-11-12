@@ -12,7 +12,7 @@ Interactive WebSocket Chat with ACP Agent (Textual Edition)
 A beautiful terminal UI for chatting with an ACP agent through the relay server.
 
 Usage:
-    python3 examples/textual_chat.py
+    python3 clients/textual_chat.py
 """
 
 import asyncio
