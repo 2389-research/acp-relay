@@ -321,8 +321,11 @@ class ACPChatApp(App):
         # Show session selection modal using run_worker to ensure we're in worker context
         async def show_session_selector():
             try:
-                # Get all sessions from database and show selector
-                sessions = get_all_sessions()
+                # Connect to relay first
+                self.websocket = await websockets.connect(RELAY_WS_URL)
+
+                # Get all sessions from relay server
+                sessions = await get_all_sessions_from_relay(self.websocket)
                 result = await self.push_screen_wait(SessionSelectionScreen(sessions))
 
                 if not result:
@@ -882,30 +885,43 @@ class ACPChatApp(App):
         self.msg_id += 1
 
 
-def get_all_sessions():
-    """Get list of all sessions (active and closed) from the database"""
+async def get_all_sessions_from_relay(websocket) -> list:
+    """Get list of all sessions from the relay server via WebSocket"""
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.execute("""
-            SELECT id, working_directory, created_at, closed_at
-            FROM sessions
-            ORDER BY created_at DESC
-            LIMIT 20
-        """)
-        sessions = []
-        for row in cursor:
-            sessions.append({
-                "id": row[0],
-                "working_directory": row[1],
-                "created_at": row[2],
-                "closed_at": row[3],
-                "is_active": row[3] is None
-            })
-        conn.close()
-        return sessions
-    except (sqlite3.Error, FileNotFoundError):
-        # If database doesn't exist or has errors, return empty list
+        # Send session/list request
+        request = {
+            "jsonrpc": "2.0",
+            "method": "session/list",
+            "params": {},
+            "id": 999  # Use high ID to avoid conflicts
+        }
+        await websocket.send(json.dumps(request))
+
+        # Wait for response
+        raw_msg = await asyncio.wait_for(websocket.recv(), timeout=5.0)
+        msg = json.loads(raw_msg)
+
+        if msg.get("id") == 999 and "result" in msg:
+            sessions = msg["result"].get("sessions", [])
+            # Convert to format expected by SessionSelectionScreen
+            formatted_sessions = []
+            for s in sessions:
+                formatted_sessions.append({
+                    "id": s["id"],
+                    "working_directory": s["workingDirectory"],
+                    "created_at": s["createdAt"],
+                    "closed_at": s["closedAt"],
+                    "is_active": s["isActive"]
+                })
+            return formatted_sessions
+        elif "error" in msg:
+            print(f"Error getting sessions: {msg['error'].get('message', 'unknown')}")
+            return []
+    except (asyncio.TimeoutError, Exception) as e:
+        print(f"Failed to get sessions from relay: {e}")
         return []
+
+    return []
 
 
 def mark_session_closed(session_id: str, reason: str = "stale"):
