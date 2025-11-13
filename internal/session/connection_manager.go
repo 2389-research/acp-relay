@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/harper/acp-relay/internal/db"
 )
 
 type ConnectionManager struct {
@@ -124,6 +125,13 @@ func (cm *ConnectionManager) StartBroadcaster() {
 func (cm *ConnectionManager) broadcastToClients(msg []byte) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
+
+	// Log message to database as relay->client (once per message, not per client)
+	if cm.session.DB != nil {
+		if err := cm.session.DB.LogMessage(cm.session.ID, db.DirectionRelayToClient, msg); err != nil {
+			log.Printf("[%s] failed to log relay->client message: %v", cm.session.ID[:8], err)
+		}
+	}
 
 	for clientID, client := range cm.connections {
 		// Append to unlimited buffer
