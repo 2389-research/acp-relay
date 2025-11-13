@@ -22,9 +22,10 @@ services:
       - relay-data:/data
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - HOME=/root
+      - HOME=/home/relay
       - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       - XDG_DATA_HOME=/data
+      - NPM_CONFIG_CACHE=/tmp/npm-cache
     env_file:
       - .env
     restart: unless-stopped

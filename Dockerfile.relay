@@ -45,6 +45,9 @@ RUN mkdir -p /data
 # Create config directory (configs will be mounted at runtime)
 RUN mkdir -p /app/config
 
+# Create temporary directories for npm cache (world-writable)
+RUN mkdir -p /tmp/npm-cache && chmod 777 /tmp/npm-cache
+
 # Expose ports
 EXPOSE 23890 23891 23892
 
