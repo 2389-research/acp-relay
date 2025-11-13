@@ -1,0 +1,34 @@
+server:
+  http_port: 23890
+  http_host: "0.0.0.0"
+  websocket_port: 23891
+  websocket_host: "0.0.0.0"
+  management_port: 23892
+  management_host: "0.0.0.0"  # Allow management from outside container
+
+agent:
+  # Use container mode for isolation
+  mode: "container"
+  # Environment variables passed to agent containers
+  env:
+    ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+    HOME: "${HOME}"
+    PATH: "${PATH}"
+  startup_timeout_seconds: 10
+  max_concurrent_sessions: 100
+  # Container mode config for Docker-in-Docker deployment
+  container:
+    image: "acp-relay-agent:latest"
+    docker_host: "unix:///var/run/docker.sock"
+    network_mode: "bridge"
+    memory_limit: "512m"
+    cpu_limit: 1.0
+    # CRITICAL: This must be the HOST path (where docker-compose mounts it)
+    # Not the relay container's internal path, because agent containers are siblings
+    workspace_host_base: "${ACP_WORKSPACES_HOST_PATH}"
+    workspace_container_path: "/workspace"
+    auto_remove: true
+    startup_timeout_seconds: 10
+
+database:
+  path: "/data/relay-messages.db"

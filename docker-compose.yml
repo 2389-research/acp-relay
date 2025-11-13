@@ -1,0 +1,63 @@
+# ABOUTME: Docker Compose configuration for acp-relay development and deployment
+# ABOUTME: Orchestrates relay server with volume mounts and environment configuration
+
+services:
+  relay:
+    build:
+      context: .
+      dockerfile: Dockerfile.relay
+    container_name: acp-relay
+    command: ["/app/acp-relay", "--config", "/app/config/config-docker.yaml"]
+    ports:
+      - "23890:23890"  # HTTP API
+      - "23891:23891"  # WebSocket
+      - "23892:23892"  # Management API (consider restricting to localhost in production)
+    volumes:
+      # Mount configuration files (allows config changes without rebuild)
+      - ./config-docker.yaml:/app/config/config-docker.yaml:ro
+      - ./config.yaml:/app/config/config.yaml:ro
+      # Mount working directory for development
+      - ./:/app/workspace:rw
+      # Mount data directory for database persistence
+      - relay-data:/data
+      # Mount ACP agent workspaces (MUST be bind mount, not volume, for Docker-in-Docker)
+      # The relay spawns agent containers that need access to these same paths
+      - ${ACP_WORKSPACES_DIR:-./data/workspaces}:/data/workspaces:rw
+      # Mount Docker socket for container mode (if using container-based agents)
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - HOME=/home/relay
+      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - XDG_DATA_HOME=/data
+      # Important: workspace_host_base must be the HOST path, not the container path
+      # Because agent containers are siblings (Docker-in-Docker via socket)
+      - ACP_WORKSPACES_HOST_PATH=${ACP_WORKSPACES_DIR:-./data/workspaces}
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - acp-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:23890/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Optional: Agent container (pre-built image for container mode)
+  # Uncomment if you want to pre-build the agent container
+  # agent:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   image: acp-relay-agent:latest
+  #   # This container doesn't run - it's just built for the relay to spawn
+
+volumes:
+  relay-data:
+    driver: local
+
+networks:
+  acp-network:
+    driver: bridge

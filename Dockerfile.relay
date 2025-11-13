@@ -1,0 +1,48 @@
+# ABOUTME: Multistage build for the acp-relay server Go application
+# ABOUTME: Produces optimized production image with minimal dependencies
+
+# Build stage
+FROM golang:1.23-bookworm AS builder
+
+WORKDIR /build
+
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the relay binary
+RUN CGO_ENABLED=1 GOOS=linux go build -o acp-relay ./cmd/relay
+
+# Production stage
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    sqlite3 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /build/acp-relay /app/acp-relay
+
+# Create data directory for database
+RUN mkdir -p /data
+
+# Create config directory (configs will be mounted at runtime)
+RUN mkdir -p /app/config
+
+# Expose ports
+EXPOSE 23890 23891 23892
+
+# Run as non-root user
+RUN useradd --create-home --shell /bin/bash relay
+RUN chown -R relay:relay /app /data
+USER relay
+
+CMD ["/app/acp-relay", "--config", "/app/config/config.yaml"]
