@@ -45,4 +45,4 @@ RUN useradd --create-home --shell /bin/bash relay
 RUN chown -R relay:relay /app /data
 USER relay
 
-CMD ["/app/acp-relay", "--config", "/app/config/config.yaml"]
+CMD ["/app/acp-relay", "serve", "--config", "/app/config/config.yaml"]

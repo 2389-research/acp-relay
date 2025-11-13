@@ -7,7 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile.relay
     container_name: acp-relay
-    command: ["/app/acp-relay", "--config", "/app/config/config-docker.yaml"]
+    command: ["/app/acp-relay", "serve", "--config", "/app/config/config-docker.yaml"]
     ports:
       - "23890:23890"  # HTTP API
       - "23891:23891"  # WebSocket
