@@ -9,6 +9,9 @@ server:
 agent:
   # Use container mode for isolation
   mode: "container"
+  # Command to run inside agent containers
+  command: "npx"
+  args: ["@zed-industries/claude-code-acp"]
   # Environment variables passed to agent containers
   env:
     ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
