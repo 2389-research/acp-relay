@@ -157,16 +157,17 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			currentClientID = sess.AttachClient(conn)
 			log.Printf("[WS:%s] Client %s resuming session", sess.ID[:8], currentClientID)
 
-			// Fetch and replay recent messages to avoid blank screen
-			// Only replay agent->client messages (responses, notifications, events)
-			s.replayRecentMessages(conn, sess, currentClientID, params.SessionID)
-
-			// Send response with both session ID and client ID
+			// Send response with both session ID and client ID FIRST
+			// Client needs confirmation before receiving replayed messages
 			result := map[string]interface{}{
 				"sessionId": sess.ID,
 				"clientId":  currentClientID,
 			}
 			s.sendResponseSafe(conn, sess, currentClientID, result, req.ID)
+
+			// THEN fetch and replay recent messages to avoid blank screen
+			// Only replay agent->client messages (responses, notifications, events)
+			s.replayRecentMessages(conn, sess, currentClientID, params.SessionID)
 
 		case "session/list":
 			// List all sessions from database
