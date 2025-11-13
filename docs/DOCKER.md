@@ -25,7 +25,8 @@ vim .env
 ### 2. Build and Run
 
 ```bash
-# Build and start the relay
+# Build both relay and agent images, start relay
+docker compose build
 docker compose up -d
 
 # View logs
@@ -34,6 +35,8 @@ docker compose logs -f relay
 # Check status
 docker compose ps
 ```
+
+**Note**: The agent image (`acp-relay-agent:latest`) is built but not started. The relay spawns agent containers dynamically as needed.
 
 ### 3. Access the Relay
 
@@ -325,13 +328,21 @@ The `Dockerfile` (not `Dockerfile.relay`) builds the agent container image:
 
 - Node.js 20 runtime
 - Python 3 support
-- Pre-installed ACP agents
-- Common development tools
+- Pre-installed ACP agents (`@zed-industries/claude-code-acp`)
+- Common development tools (git, curl)
+
+The agent service in docker-compose.yml builds this image automatically but doesn't run it (uses `profiles: [donotstart]`). The relay spawns instances of this image dynamically for each session.
 
 To build manually:
 
 ```bash
 docker build -t acp-relay-agent:latest -f Dockerfile .
+```
+
+Or rebuild via compose:
+
+```bash
+docker compose build agent
 ```
 
 ## Environment Variables Reference
