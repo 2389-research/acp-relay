@@ -23,7 +23,7 @@ agent:
   container:
     image: "acp-relay-agent:latest"
     docker_host: "unix:///var/run/docker.sock"
-    network_mode: "bridge"
+    network_mode: "acp-relay_acp-network"
     memory_limit: "512m"
     cpu_limit: 1.0
     # CRITICAL: This must be the HOST path (where docker-compose mounts it)
