@@ -205,11 +205,36 @@ docker compose exec relay bash
 ACP_WORKSPACES_DIR=/Users/harper/Public/src/2389/acp-relay/data/workspaces
 ```
 
-### Permission Errors
+### Docker Socket Permission Denied
+
+**Symptom**: `Failed to initialize container manager: permission denied while trying to connect to the Docker daemon socket`
+
+**Cause**: The relay container needs access to the Docker socket to spawn agent containers.
+
+**Solution**: The docker-compose.yml runs the relay as `root` to access the Docker socket. This is safe because:
+- The relay container is isolated
+- Agent containers can still run as non-root
+- It's required for Docker-in-Docker functionality
+
+If you want to avoid root, use `group_add` to match the host's docker GID:
+
+```yaml
+# In docker-compose.yml (alternative to user: root)
+services:
+  relay:
+    user: "1000:999"  # uid:gid where gid is docker group on host
+    # Or:
+    group_add:
+      - "999"  # Add host's docker group GID
+```
+
+Find your docker group GID: `getent group docker | cut -d: -f3`
+
+### Workspace Permission Errors
 
 **Symptom**: Database or workspace errors with "permission denied"
 
-**Solution**: The relay runs as the `relay` user (non-root). Ensure directories are writable:
+**Solution**: Ensure directories are writable by the container:
 
 ```bash
 # Create workspace directory with correct permissions
@@ -261,9 +286,10 @@ healthcheck:
 
 ### Security
 
-1. **Restrict Management API**: Change `management_host` to `127.0.0.1` in production
-2. **Use Secrets**: Don't commit `.env` with real API keys
-3. **Update Base Images**: Regularly rebuild with latest security patches
+1. **Docker Socket Access**: The relay runs as root to access the Docker socket for spawning agent containers. This is required for Docker-in-Docker and is safe within the isolated container context.
+2. **Restrict Management API**: Change `management_host` to `127.0.0.1` in production
+3. **Use Secrets**: Don't commit `.env` with real API keys
+4. **Update Base Images**: Regularly rebuild with latest security patches
 
 ### Performance
 
