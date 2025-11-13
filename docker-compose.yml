@@ -8,11 +8,6 @@ services:
       dockerfile: Dockerfile.relay
     container_name: acp-relay
     command: ["/app/acp-relay", "serve", "--config", "/app/config/config-docker.yaml"]
-    # Run as root to access Docker socket (container spawning requires this)
-    user: root
-    depends_on:
-      agent:
-        condition: service_completed_successfully
     ports:
       - "23890:23890"  # HTTP API
       - "23891:23891"  # WebSocket
@@ -25,19 +20,11 @@ services:
       - ./:/app/workspace:rw
       # Mount data directory for database persistence
       - relay-data:/data
-      # Mount ACP agent workspaces (MUST be bind mount, not volume, for Docker-in-Docker)
-      # The relay spawns agent containers that need access to these same paths
-      - ${ACP_WORKSPACES_DIR:-./data/workspaces}:/data/workspaces:rw
-      # Mount Docker socket for container mode (if using container-based agents)
-      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - HOME=/home/relay
+      - HOME=/root
       - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       - XDG_DATA_HOME=/data
-      # Important: workspace_host_base must be the HOST path, not the container path
-      # Because agent containers are siblings (Docker-in-Docker via socket)
-      - ACP_WORKSPACES_HOST_PATH=${ACP_WORKSPACES_DIR:-./data/workspaces}
     env_file:
       - .env
     restart: unless-stopped
@@ -49,18 +36,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-
-  # Agent container image (built but not run)
-  # The relay spawns instances of this image dynamically for each session
-  # This service builds the image then exits immediately
-  agent:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: acp-relay-agent:latest
-    container_name: acp-relay-agent-builder
-    command: /bin/true
-    restart: "no"
 
 volumes:
   relay-data:

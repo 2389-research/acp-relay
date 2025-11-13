@@ -19,12 +19,20 @@ RUN CGO_ENABLED=1 GOOS=linux go build -o acp-relay ./cmd/relay
 # Production stage
 FROM debian:bookworm-slim
 
-# Install runtime dependencies
+# Install runtime dependencies including Node.js for agent processes
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     sqlite3 \
     curl \
+    nodejs \
+    npm \
+    git \
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+# Pre-install ACP agents globally for faster agent startup
+RUN npm install -g @zed-industries/claude-code-acp
 
 WORKDIR /app
 
