@@ -157,6 +157,10 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			currentClientID = sess.AttachClient(conn)
 			log.Printf("[WS:%s] Client %s resuming session", sess.ID[:8], currentClientID)
 
+			// Fetch and replay recent messages to avoid blank screen
+			// Only replay agent->client messages (responses, notifications, events)
+			s.replayRecentMessages(conn, sess, currentClientID, params.SessionID)
+
 			// Send response with both session ID and client ID
 			result := map[string]interface{}{
 				"sessionId": sess.ID,
@@ -367,5 +371,35 @@ func (s *Server) sendLLMError(conn *websocket.Conn, sess *session.Session, clien
 		if writeErr := conn.WriteMessage(websocket.TextMessage, data); writeErr != nil {
 			log.Printf("Failed to write LLM error response: %v", writeErr)
 		}
+	}
+}
+
+func (s *Server) replayRecentMessages(conn *websocket.Conn, sess *session.Session, clientID, sessionID string) {
+	const replayMessageCount = 50
+	messages, err := s.sessionMgr.GetSessionHistory(sessionID)
+	if err != nil || len(messages) == 0 {
+		return
+	}
+
+	// Get last N messages
+	startIdx := 0
+	if len(messages) > replayMessageCount {
+		startIdx = len(messages) - replayMessageCount
+	}
+	recentMessages := messages[startIdx:]
+
+	// Replay agent->relay and relay->client messages
+	replayCount := 0
+	for _, msg := range recentMessages {
+		if msg.Direction == db.DirectionAgentToRelay || msg.Direction == db.DirectionRelayToClient {
+			if len(msg.RawMessage) > 0 {
+				_ = conn.WriteMessage(websocket.TextMessage, []byte(msg.RawMessage))
+				replayCount++
+			}
+		}
+	}
+
+	if replayCount > 0 {
+		log.Printf("[WS:%s] Replayed %d recent messages to client %s", sess.ID[:8], replayCount, clientID)
 	}
 }
