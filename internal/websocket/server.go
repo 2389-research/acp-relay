@@ -389,11 +389,14 @@ func (s *Server) replayRecentMessages(conn *websocket.Conn, sess *session.Sessio
 	}
 	recentMessages := messages[startIdx:]
 
-	// Replay agent->relay and relay->client messages
+	// Replay only relay->client messages (what the client originally saw)
+	// Don't replay agent->relay (those are agent's raw responses before processing)
 	replayCount := 0
 	for _, msg := range recentMessages {
-		if msg.Direction == db.DirectionAgentToRelay || msg.Direction == db.DirectionRelayToClient {
+		if msg.Direction == db.DirectionRelayToClient {
 			if len(msg.RawMessage) > 0 {
+				log.Printf("[WS:%s] Replaying message: method=%s, type=%s, len=%d",
+					sess.ID[:8], msg.Method, msg.MessageType, len(msg.RawMessage))
 				_ = conn.WriteMessage(websocket.TextMessage, []byte(msg.RawMessage))
 				replayCount++
 			}
