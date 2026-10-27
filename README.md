@@ -125,6 +125,35 @@ agent:
   max_concurrent_sessions: 100
 ```
 
+## Authentication
+
+ACP Relay supports two authentication methods for Claude Code:
+
+### Subscription Authentication (No API Key Required)
+
+If you have a Claude Pro/Team subscription, simply run the server without setting an API key:
+
+```bash
+./acp-relay serve --config config.yaml
+```
+
+When no `ANTHROPIC_API_KEY` environment variable is set, Claude Code automatically uses subscription-based authentication with OAuth flow.
+
+**Benefits:**
+- No API key management required
+- Uses your existing Claude Pro/Team subscription
+- Unified billing and account management
+- Secure browser-based authentication
+
+### API Key Authentication
+
+For API key authentication, set your API key as an environment variable:
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+./acp-relay serve --config config.yaml
+```
+
 ### First-Time Setup
 
 For container mode, run the interactive setup:
